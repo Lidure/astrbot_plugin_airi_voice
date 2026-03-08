@@ -8,73 +8,45 @@ from astrbot.api import logger
 @register("airi_voice", "lidure", "输入文件名发送对应语音", "1.0", "https://github.com/你的仓库/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
-        super().__init__(context)
-        
-        # 插件目录和本地 voices 目录
-        self.plugin_dir = os.path.abspath(os.path.dirname(__file__))
-        self.voice_dir = os.path.join(self.plugin_dir, "voices")
-        
-        # 先加载本地 voices 文件夹的语音
-        self.voice_map: Dict[str, str] = self._scan_voices()
-        
-        # 保存 config 以便后续 reload 时使用
-        self.config = config
-        
-        logger.info("[AiriVoice] === 配置加载开始 ===")
-        
-        if config is not None:
-            logger.info(f"[AiriVoice] 完整 config: {config}")
-            
-            extra = config.get("extra_voice_file")
-            if extra:
-                if isinstance(extra, list):
-                    for rel_path in extra:
-                        if isinstance(rel_path, str):
-                            plugin_name = "astrbot_plugin_airi_voice"
-                            
-                            # 使用正确的存储目录：data/plugin_data/插件名/
-                            # 动态向上找，直到找到包含 'data' 和 'plugins' 的目录
-                            p = Path(__file__).resolve()
-                            while p.name != "AstrBot" and p.parent != p:  # 防止无限循环
-                                p = p.parent
-                                if "data" in p.iterdir() and any(d.name == "plugins" for d in p.iterdir() if d.is_dir()):
-                                    root_dir = p
-                                    break
-                            else:
-                                # 如果找不到，用硬编码 fallback
-                                root_dir = Path(r"F:\NORMAL\My_bot\AstrBot Tool\Local\AstrBotLauncher-0.2.0\AstrBot")
-                                logger.warning("[AiriVoice] 动态查找根目录失败，使用硬编码路径")
-                            config_base = root_dir / "data" / "plugin_data" / plugin_name
-                            
-                            abs_path = config_base / rel_path
-                            
-                            logger.debug(f"[AiriVoice] 尝试加载路径: {abs_path}")
-                            
-                            if abs_path.exists() and abs_path.is_file():
-                                keyword = os.path.splitext(os.path.basename(rel_path))[0].strip()
-                                self.voice_map[keyword] = str(abs_path)
-                                logger.info(f"[AiriVoice] 成功加载网页上传语音: '{keyword}' → {abs_path}")
-                            else:
-                                logger.error(f"[AiriVoice] 文件不存在: {abs_path}")
-                                
-                                # 备用硬编码路径（测试通过后可删除或注释）
-                                fallback_base = Path(r"F:\NORMAL\My_bot\AstrBot Tool\Local\AstrBotLauncher-0.2.0\AstrBot\data\plugin_data\astrbot_plugin_airi_voice")
-                                fallback_path = fallback_base / rel_path
-                                if fallback_path.exists() and fallback_path.is_file():
+            super().__init__(context)
+            self.plugin_dir = os.path.abspath(os.path.dirname(__file__))
+            self.voice_dir = os.path.join(self.plugin_dir, "voices")
+            self.voice_map: Dict[str, str] = self._scan_voices()
+    
+            logger.info("[AiriVoice] === 配置加载开始 ===")
+            if config is not None:
+                logger.info(f"[AiriVoice] 完整 config: {config}")
+                extra = config.get("extra_voice_file")
+                if extra:
+                    # 处理 list（即使单个文件也可能是 list）
+                    if isinstance(extra, list):
+                        for rel_path in extra:
+                            if isinstance(rel_path, str):
+                                # 构建绝对路径：假设上传文件在 data/config/插件名/ 下
+                                # 插件名从 __file__ 或硬编码（这里假设 'astrbot_plugin_airi_voice'）
+                                plugin_name = "astrbot_plugin_airi_voice"
+                                config_base = Path(__file__).parent.parent.parent / "data" / "config" / plugin_name
+                                abs_path = config_base / rel_path
+    
+                                if abs_path.exists():
                                     keyword = os.path.splitext(os.path.basename(rel_path))[0].strip()
-                                    self.voice_map[keyword] = str(fallback_path)
-                                    logger.info(f"[AiriVoice] 使用 fallback 路径加载成功: '{keyword}' → {fallback_path}")
+                                    self.voice_map[keyword] = str(abs_path)
+                                    logger.info(f"[AiriVoice] 从网页上传加载: '{keyword}' → {abs_path}")
                                 else:
-                                    logger.warning(f"[AiriVoice] 所有路径尝试均失败: {rel_path}")
+                                    logger.error(f"[AiriVoice] 上传文件路径不存在: {abs_path} (相对: {rel_path})")
+                    elif isinstance(extra, str):
+                        # fallback 如果是 str
+                        # 同上构建路径...
+                        pass  # 可类似处理
+                    else:
+                        logger.warning(f"[AiriVoice] extra_voice_file 未知格式: {type(extra)}")
                 else:
-                    logger.warning(f"[AiriVoice] extra_voice_file 不是 list 类型: {type(extra)}")
+                    logger.info("[AiriVoice] 无 extra_voice_file")
             else:
-                logger.info("[AiriVoice] config 中没有 extra_voice_file")
-        else:
-            logger.info("[AiriVoice] __init__ 未收到 config 参数")
-        
-        logger.info(f"[AiriVoice] 当前语音总数: {len(self.voice_map)} 个")
-        logger.info("[AiriVoice] === 配置加载结束 ===")
+                logger.info("[AiriVoice] 未收到 config")
+    
+            logger.info(f"[AiriVoice] 当前语音总数: {len(self.voice_map)} 个")
+            logger.info("[AiriVoice] === 配置加载结束 ===")
     
 
     def _scan_voices(self) -> Dict[str, str]:
