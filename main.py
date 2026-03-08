@@ -40,7 +40,7 @@ class AiriVoice(Star):
                                 else:
                                     logger.error(f"[AiriVoice] 路径不存在或不是文件: {abs_path} (相对: {rel_path})")
                                     # 额外尝试常见变体
-                                    alt_base = Path("F:/NORMAL/My_bot/AstrBot Tool/Local/AstrBotLauncher-0.2.0/AstrBot/data/plugin_data/") / plugin_name
+                                    alt_base = Path("F:/NORMAL/My_bot/AstrBot Tool/Local/AstrBotLauncher-0.2.0/AstrBot/data/plugin_data/")
                                     alt_path = alt_base / rel_path
                                     if alt_path.exists():
                                         self.voice_map[keyword] = str(alt_path)
