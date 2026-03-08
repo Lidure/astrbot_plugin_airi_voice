@@ -12,25 +12,34 @@ class AiriVoice(Star):
         self.voice_dir = os.path.join(self.plugin_dir, "voices")
         self.voice_map: Dict[str, str] = self._scan_voices()
     
-        # 加载网页上传的单个额外文件
+        logger.info("[AiriVoice] === 插件配置加载开始 ===")
         if config is not None:
+            logger.info(f"[AiriVoice] 收到的 config 完整内容: {config}")
             extra_file = config.get("extra_voice_file")
             if extra_file:
-                # extra_file 可能是 str（路径）或 dict（如 {"path": "...", "name": "..."}）
-                logger.info(f"[AiriVoice] 网页配置内容: {extra_file}")
+                logger.info(f"[AiriVoice] extra_voice_file 值: {extra_file} (类型: {type(extra_file)})")
+                
+                # 尝试处理不同可能格式
+                file_path = None
                 if isinstance(extra_file, str):
                     file_path = extra_file
-                    keyword = os.path.splitext(os.path.basename(file_path))[0].strip()
                 elif isinstance(extra_file, dict) and "path" in extra_file:
                     file_path = extra_file["path"]
-                    keyword = os.path.splitext(extra_file.get("name") or os.path.basename(file_path))[0].strip()
                 else:
-                    logger.warning("[AiriVoice] 未知的 extra_voice_file 格式")
-                    return
-    
-                if keyword and os.path.exists(file_path):
-                    self.voice_map[keyword] = file_path
-                    logger.info(f"[AiriVoice] 从网页上传加载额外语音: '{keyword}' → {file_path}")
+                    logger.warning("[AiriVoice] extra_voice_file 格式未知，无法加载")
+                
+                if file_path:
+                    if os.path.exists(file_path):
+                        keyword = os.path.splitext(os.path.basename(file_path))[0].strip()
+                        self.voice_map[keyword] = file_path
+                        logger.info(f"[AiriVoice] 成功从网页配置加载额外语音: '{keyword}' → {file_path}")
+                    else:
+                        logger.error(f"[AiriVoice] 上传文件路径不存在！路径: {file_path}")
+            else:
+                logger.info("[AiriVoice] 无 extra_voice_file 配置")
+        else:
+            logger.info("[AiriVoice] __init__ 未收到 config 参数")
+        logger.info("[AiriVoice] === 配置加载结束 ===")
 
     def _scan_voices(self) -> Dict[str, str]:
         """扫描 voices 目录，建立 {文件名(无后缀): 绝对路径} 映射"""
@@ -71,16 +80,28 @@ class AiriVoice(Star):
         except Exception as e:
             yield event.plain_result(f"发送语音失败：{str(e)}（文件：{text}）")
             
+
     @filter.command("voice_reload")
-    async def reload_voices(self, event: AstrMessageEvent):
-        old_count = len(self.voice_map)
-        self.voice_map = self._scan_voices()
-        new_count = len(self.voice_map)
-        yield event.plain_result(
-            f"语音列表已重新加载！\n"
-            f"之前：{old_count} 个 → 现在：{new_count} 个\n"
-            f"新增/变更的文件已生效，无需重启～"
-        )
+async def reload_voices(self, event: AstrMessageEvent):
+    old_count = len(self.voice_map)
+    
+    # 重新扫描本地 voices/
+    self.voice_map = self._scan_voices()
+    
+    # 重新加载网页 config（需要访问 config，但 __init__ 外的 reload 无法直接拿 config）
+    # 临时方案：假设你把 config 存为 self.config
+    if hasattr(self, 'config') and self.config:
+        extra_file = self.config.get("extra_voice_file")
+        if extra_file and isinstance(extra_file, str) and os.path.exists(extra_file):
+            keyword = os.path.splitext(os.path.basename(extra_file))[0].strip()
+            self.voice_map[keyword] = extra_file
+    
+    new_count = len(self.voice_map)
+    yield event.plain_result(
+        f"语音列表已重新加载！\n"
+        f"本地 voices/: {old_count} → {new_count} 个（含网页额外文件）\n"
+        f"输入关键词测试，或 /voice_list 查看"
+    )
         
     # 可选：加一个命令查看所有可用关键词
     @filter.command("voice_list")
