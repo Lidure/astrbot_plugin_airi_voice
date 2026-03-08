@@ -8,58 +8,64 @@ from astrbot.api import logger
 @register("airi_voice", "lidure", "输入文件名发送对应语音", "1.0", "https://github.com/你的仓库/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
-            super().__init__(context)
-            self.plugin_dir = os.path.abspath(os.path.dirname(__file__))
-            self.voice_dir = os.path.join(self.plugin_dir, "voices")
-            self.voice_map: Dict[str, str] = self._scan_voices()
-            self.config = config  # 保存 config 引用
-    
-            logger.info("[AiriVoice] === 配置加载开始 ===")
-            if config is not None:
-                logger.info(f"[AiriVoice] 完整 config: {config}")
-                extra = config.get("extra_voice_file")
-                if extra:
-                    # 处理 list（即使单个文件也可能是 list）
-                    if isinstance(extra, list):
-                        for rel_path in extra:
-                            if isinstance(rel_path, str):
-                                plugin_name = "astrbot_plugin_airi_voice"  # 你的插件文件夹名，确保一致
-                                # 正确基目录：AstrBot 根目录 / data / config / plugin_name
-                                config_base = Path(__file__).resolve().parents[3] / "data" / "config" / plugin_name
-                                # parents[3]：从 main.py → 插件文件夹 → data/plugins → AstrBot 根
-                                # 如果不对，试 parents[2] 或 parents[4]，日志会告诉你
-                    
-                                abs_path = config_base / rel_path
-                    
-                                logger.debug(f"[AiriVoice] 尝试绝对路径: {abs_path}")
-                    
-                                if abs_path.exists() and abs_path.is_file():
+        super().__init__(context)
+        
+        # 插件目录和本地 voices 目录
+        self.plugin_dir = os.path.abspath(os.path.dirname(__file__))
+        self.voice_dir = os.path.join(self.plugin_dir, "voices")
+        
+        # 先加载本地 voices 文件夹的语音
+        self.voice_map: Dict[str, str] = self._scan_voices()
+        
+        # 保存 config 以便后续 reload 时使用
+        self.config = config
+        
+        logger.info("[AiriVoice] === 配置加载开始 ===")
+        
+        if config is not None:
+            logger.info(f"[AiriVoice] 完整 config: {config}")
+            
+            extra = config.get("extra_voice_file")
+            if extra:
+                if isinstance(extra, list):
+                    for rel_path in extra:
+                        if isinstance(rel_path, str):
+                            plugin_name = "astrbot_plugin_airi_voice"
+                            
+                            # 使用正确的存储目录：data/plugin_data/插件名/
+                            root_dir = Path(__file__).resolve().parents[3]
+                            config_base = root_dir / "data" / "plugin_data" / plugin_name
+                            
+                            abs_path = config_base / rel_path
+                            
+                            logger.debug(f"[AiriVoice] 尝试加载路径: {abs_path}")
+                            
+                            if abs_path.exists() and abs_path.is_file():
+                                keyword = os.path.splitext(os.path.basename(rel_path))[0].strip()
+                                self.voice_map[keyword] = str(abs_path)
+                                logger.info(f"[AiriVoice] 成功加载网页上传语音: '{keyword}' → {abs_path}")
+                            else:
+                                logger.error(f"[AiriVoice] 文件不存在: {abs_path}")
+                                
+                                # 备用硬编码路径（测试通过后可删除或注释）
+                                fallback_base = Path(r"F:\NORMAL\My_bot\AstrBot Tool\Local\AstrBotLauncher-0.2.0\AstrBot\data\plugin_data\astrbot_plugin_airi_voice")
+                                fallback_path = fallback_base / rel_path
+                                if fallback_path.exists() and fallback_path.is_file():
                                     keyword = os.path.splitext(os.path.basename(rel_path))[0].strip()
-                                    self.voice_map[keyword] = str(abs_path)
-                                    logger.info(f"[AiriVoice] 成功加载网页上传语音: '{keyword}' → {abs_path}")
+                                    self.voice_map[keyword] = str(fallback_path)
+                                    logger.info(f"[AiriVoice] 使用 fallback 路径加载成功: '{keyword}' → {fallback_path}")
                                 else:
-                                    logger.error(f"[AiriVoice] 路径不存在或不是文件: {abs_path} (相对: {rel_path})")
-                                    # 额外尝试常见变体
-                                    alt_base = Path("F:/NORMAL/My_bot/AstrBot Tool/Local/AstrBotLauncher-0.2.0/AstrBot/data/plugin_data/")
-                                    alt_path = alt_base / rel_path
-                                    if alt_path.exists():
-                                        self.voice_map[keyword] = str(alt_path)
-                                        logger.info(f"[AiriVoice] 使用备用路径加载成功: {alt_path}")
-                                    else:
-                                        logger.warning("[AiriVoice] 所有路径尝试均失败，请检查 AstrBot data/config 目录下是否有 files/extra_voice_file/ 文件夹")
-                    elif isinstance(extra, str):
-                        # fallback 如果是 str
-                        # 同上构建路径...
-                        pass  # 可类似处理
-                    else:
-                        logger.warning(f"[AiriVoice] extra_voice_file 未知格式: {type(extra)}")
+                                    logger.warning(f"[AiriVoice] 所有路径尝试均失败: {rel_path}")
                 else:
-                    logger.info("[AiriVoice] 无 extra_voice_file")
+                    logger.warning(f"[AiriVoice] extra_voice_file 不是 list 类型: {type(extra)}")
             else:
-                logger.info("[AiriVoice] 未收到 config")
+                logger.info("[AiriVoice] config 中没有 extra_voice_file")
+        else:
+            logger.info("[AiriVoice] __init__ 未收到 config 参数")
+        
+        logger.info(f"[AiriVoice] 当前语音总数: {len(self.voice_map)} 个")
+        logger.info("[AiriVoice] === 配置加载结束 ===")
     
-            logger.info(f"[AiriVoice] 当前语音总数: {len(self.voice_map)} 个")
-            logger.info("[AiriVoice] === 配置加载结束 ===")
 
     def _scan_voices(self) -> Dict[str, str]:
         """扫描 voices 目录，建立 {文件名(无后缀): 绝对路径} 映射"""
