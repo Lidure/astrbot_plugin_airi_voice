@@ -2,19 +2,19 @@ import os
 from pathlib import Path
 from typing import Dict
 
-from astrbot.star import Context, register
-from astrbot.message.message_event import AstrMessageEvent
+from astrbot.api.star import Context, Star
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api import logger  # 可选，用于错误日志
+
 from astrbot.message.message_chain import MessageChain
 from astrbot.message.segment import Record
-from astrbot.star.filter import command, on_keyword
 
-@register("语音打卡包", "Lidure", "输入关键词发送对应语音", "1.0", "https://github.com/Lidure/astrbot_plugin_airi_voice")
-class VoiceDaka:
+class VoiceDaka(Star):
     def __init__(self, context: Context):
-        self.context = context
+        super().__init__(context)
         # 插件目录下的 voices 文件夹
         self.voice_dir = Path(__file__).parent / "voices"
-        self.voice_map: Dict[str, str] = {}  # 关键词 -> 文件名（不含后缀）
+        self.voice_map: Dict[str, str] = {}  # 关键词 -> 文件路径
 
         self._load_voices()
 
@@ -29,8 +29,8 @@ class VoiceDaka:
                 keyword = file.stem.strip()   # 文件名作为关键词
                 self.voice_map[keyword] = str(file)
 
-    @on_keyword()
-    async def handle_keyword(self, event: AstrMessageEvent):
+    @filter.keyword()  # 使用关键词匹配装饰器
+    async def on_message(self, event: AstrMessageEvent):
         text = event.message_str.strip()
 
         if not text:
@@ -38,14 +38,16 @@ class VoiceDaka:
 
         matched_path = self.voice_map.get(text)
         if not matched_path:
-            # 也可以做模糊匹配或 startsWith，但先简单精确匹配
-            return False
+            return False  # 没匹配到，放行给其他插件
 
-        chain = MessageChain()
-        # 核心：发送 Record 语音段
-        chain.append(Record(file=matched_path))  # 本地绝对路径
+        try:
+            chain = MessageChain()
+            chain.append(Record(file=matched_path))  # 发送本地语音文件
 
-        # 如果你的平台不支持本地路径，可以改用 file_url=http链接（需自己搭文件服务器）
+            await event.reply(chain)
+            return True  # 已处理，拦截后续
 
-        await event.reply(chain)
-        return True   # 拦截，不让继续处理
+        except Exception as e:
+            logger.error(f"发送语音失败: {e}")
+            await event.reply(f"语音发送出错了: {str(e)}")
+            return True
