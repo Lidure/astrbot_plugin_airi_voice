@@ -1,12 +1,8 @@
 {
-  "extra_voices": {
-    "type": "array",
-    "title": "额外语音文件（网页上传）",
-    "description": "在这里上传 mp3/wav 等文件，会自动加入可用列表。文件名即关键词。",
-    "items": {
-      "type": "file",
-      "accept": ".mp3,.wav,.ogg,.silk,.amr"
-    },
+  "extra_voice_paths": {
+    "type": "list",
+    "title": "额外语音文件路径列表",
+    "description": "输入音频文件的完整路径（一行一个），如 F:/voices/额外.mp3。保存后发 /voice_reload 生效。",
     "default": []
   }
 }
