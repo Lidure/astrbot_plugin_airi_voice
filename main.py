@@ -22,18 +22,30 @@ class AiriVoice(Star):
                     if isinstance(extra, list):
                         for rel_path in extra:
                             if isinstance(rel_path, str):
-                                # 构建绝对路径：假设上传文件在 data/config/插件名/ 下
-                                # 插件名从 __file__ 或硬编码（这里假设 'astrbot_plugin_airi_voice'）
-                                plugin_name = "astrbot_plugin_airi_voice"
-                                config_base = Path(__file__).parent.parent.parent / "data" / "config" / plugin_name
+                                plugin_name = "astrbot_plugin_airi_voice"  # 你的插件文件夹名，确保一致
+                                # 正确基目录：AstrBot 根目录 / data / config / plugin_name
+                                config_base = Path(__file__).resolve().parents[3] / "data" / "config" / plugin_name
+                                # parents[3]：从 main.py → 插件文件夹 → data/plugins → AstrBot 根
+                                # 如果不对，试 parents[2] 或 parents[4]，日志会告诉你
+                    
                                 abs_path = config_base / rel_path
-    
-                                if abs_path.exists():
+                    
+                                logger.debug(f"[AiriVoice] 尝试绝对路径: {abs_path}")
+                    
+                                if abs_path.exists() and abs_path.is_file():
                                     keyword = os.path.splitext(os.path.basename(rel_path))[0].strip()
                                     self.voice_map[keyword] = str(abs_path)
-                                    logger.info(f"[AiriVoice] 从网页上传加载: '{keyword}' → {abs_path}")
+                                    logger.info(f"[AiriVoice] 成功加载网页上传语音: '{keyword}' → {abs_path}")
                                 else:
-                                    logger.error(f"[AiriVoice] 上传文件路径不存在: {abs_path} (相对: {rel_path})")
+                                    logger.error(f"[AiriVoice] 路径不存在或不是文件: {abs_path} (相对: {rel_path})")
+                                    # 额外尝试常见变体
+                                    alt_base = Path("F:/NORMAL/My_bot/AstrBot Tool/Local/AstrBotLauncher-0.2.0/AstrBot/data/config/") / plugin_name
+                                    alt_path = alt_base / rel_path
+                                    if alt_path.exists():
+                                        self.voice_map[keyword] = str(alt_path)
+                                        logger.info(f"[AiriVoice] 使用备用路径加载成功: {alt_path}")
+                                    else:
+                                        logger.warning("[AiriVoice] 所有路径尝试均失败，请检查 AstrBot data/config 目录下是否有 files/extra_voice_file/ 文件夹")
                     elif isinstance(extra, str):
                         # fallback 如果是 str
                         # 同上构建路径...
