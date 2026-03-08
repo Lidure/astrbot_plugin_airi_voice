@@ -1,9 +1,13 @@
 from pathlib import Path
 from typing import Dict, Optional
 
-# 关键：必须导入 filter 并用它装饰
 from astrbot.api.star import Context, Star
-from astrbot.api.event import AstrMessageEvent, MessageChain, filter  # ← 这里导入 filter
+from astrbot.api.event import (
+    AstrMessageEvent,
+    MessageChain,
+    filter,                  # 必须导入
+    EventMessageType         # 枚举类型在这里
+)
 from astrbot.api.message_components import Record
 from astrbot.api import logger
 
@@ -17,7 +21,7 @@ class VoiceDaka(Star):
     def _load_voices(self):
         if not self.voice_dir.exists():
             self.voice_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("[VoiceDaka] 已创建 voices 目录")
+            logger.info("[VoiceDaka] 已创建 voices 目录，放入音频文件后重载插件")
             return
 
         count = 0
@@ -29,50 +33,51 @@ class VoiceDaka(Star):
                     abs_path = str(file.absolute())
                     self.voice_map[keyword] = abs_path
                     count += 1
-                    logger.debug(f"[VoiceDaka] 加载: '{keyword}' → {abs_path} ({ext})")
+                    logger.debug(f"[VoiceDaka] 加载语音: '{keyword}' → {abs_path} ({ext})")
 
         if count > 0:
-            logger.info(f"[VoiceDaka] 加载完成：{count} 个语音可用")
-            logger.info(f"[VoiceDaka] 关键词列表: {', '.join(self.voice_map.keys())}")
+            logger.info(f"[VoiceDaka] 加载完成：{count} 个语音文件")
+            logger.info(f"[VoiceDaka] 可用关键词: {', '.join(sorted(self.voice_map.keys()))}")
         else:
-            logger.warning("[VoiceDaka] 无有效音频")
+            logger.warning("[VoiceDaka] voices 目录中没有支持的音频文件")
 
-    # 核心修复：用 @filter.on_message() 注册，让插件收到所有消息
-    @filter.on_message()  # 或 @filter.event_message_type("ALL") 如果上面不行，试这个
-    async def on_message(self, event: AstrMessageEvent):
+    # 关键：使用 @filter.event_message_type 注册监听所有消息
+    @filter.event_message_type(EventMessageType.ALL)
+    async def on_all_message(self, event: AstrMessageEvent):
+        # 方法名可以自定义，但建议带 on_ 前缀表示事件处理器
         if event.message_str is None:
-            logger.debug("[VoiceDaka] 无文本内容，跳过")
+            logger.debug("[VoiceDaka] 消息无文本内容，跳过")
             return False
 
         text = event.message_str.strip()
-        logger.debug(f"[VoiceDaka] 收到文本消息: '{text}' (原始: '{event.message_str}')")
+        logger.debug(f"[VoiceDaka] 收到消息: '{text}' (原始: '{event.message_str}')")
 
         if not text:
             return False
 
         matched_path: Optional[str] = self.voice_map.get(text)
 
-        # 如果严格匹配失败，尝试包含匹配（更友好）
+        # 如果严格匹配失败，尝试“消息中包含关键词”（更宽容）
         if matched_path is None:
             for kw, path in self.voice_map.items():
                 if kw in text:
                     matched_path = path
-                    logger.debug(f"[VoiceDaka] 包含匹配成功: '{kw}' 在 '{text}' 中")
+                    logger.debug(f"[VoiceDaka] 包含匹配: '{kw}' 在 '{text}' 中")
                     break
 
         if matched_path is None:
-            logger.debug(f"[VoiceDaka] 未匹配到任何关键词: '{text}'")
+            logger.debug(f"[VoiceDaka] 未匹配关键词: '{text}'")
             return False
 
         try:
-            logger.info(f"[VoiceDaka] 准备发送语音: '{text}' → {matched_path}")
+            logger.info(f"[VoiceDaka] 尝试发送语音: '{text}' → {matched_path}")
             chain = MessageChain()
             chain.append(Record(file=matched_path))
             await event.reply(chain)
-            logger.info(f"[VoiceDaka] 语音发送成功")
-            return True  # 拦截，不让其他插件再处理
+            logger.info("[VoiceDaka] 语音发送成功")
+            return True  # 处理完成，拦截后续插件
 
         except Exception as e:
-            logger.error(f"[VoiceDaka] 发送失败: {str(e)}", exc_info=True)
-            await event.reply(f"语音出问题了: {str(e)}（可能是格式不支持，建议转成 .wav）")
+            logger.error(f"[VoiceDaka] 发送语音失败: {str(e)}", exc_info=True)
+            await event.reply(f"语音发送失败（可能是格式问题，建议用 .wav）：{str(e)}")
             return True
