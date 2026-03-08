@@ -33,7 +33,17 @@ class AiriVoice(Star):
                             plugin_name = "astrbot_plugin_airi_voice"
                             
                             # 使用正确的存储目录：data/plugin_data/插件名/
-                            root_dir = Path(__file__).resolve().parents[3]
+                            # 动态向上找，直到找到包含 'data' 和 'plugins' 的目录
+                            p = Path(__file__).resolve()
+                            while p.name != "AstrBot" and p.parent != p:  # 防止无限循环
+                                p = p.parent
+                                if "data" in p.iterdir() and any(d.name == "plugins" for d in p.iterdir() if d.is_dir()):
+                                    root_dir = p
+                                    break
+                            else:
+                                # 如果找不到，用硬编码 fallback
+                                root_dir = Path(r"F:\NORMAL\My_bot\AstrBot Tool\Local\AstrBotLauncher-0.2.0\AstrBot")
+                                logger.warning("[AiriVoice] 动态查找根目录失败，使用硬编码路径")
                             config_base = root_dir / "data" / "plugin_data" / plugin_name
                             
                             abs_path = config_base / rel_path
