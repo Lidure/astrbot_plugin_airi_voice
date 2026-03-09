@@ -6,3 +6,10 @@
     "default": []
   }
 }
+"trigger_mode": {
+  "description": "触发模式",
+  "type": "string",
+  "hint": "prefix: 必须用 #voice 前缀；direct: 直接输入关键词",
+  "default": "prefix",
+  "enum": ["prefix", "direct"]
+}
