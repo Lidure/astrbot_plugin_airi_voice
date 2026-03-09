@@ -62,6 +62,7 @@ Airi：列出所有可以触发的关键词列表～
 | `/voice.list`     | 查看所有可用关键词列表         |
 
 
+![eASymLOdhMm3XVo thumb 1000_0](https://github.com/user-attachments/assets/a01804f7-7769-4688-9caa-4f7da2796d8d)
 
 ## ❤️ 鸣谢 & 联系
 
