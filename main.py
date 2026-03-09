@@ -4,6 +4,7 @@ from astrbot.api import logger
 from astrbot.core.star.star_tools import StarTools
 from pathlib import Path
 from typing import Dict
+import re
 
 @register("airi_voice", "lidure", "输入关键词发送对应语音（本地 + 网页上传）", "1.3", "https://github.com/你的用户名/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
@@ -97,27 +98,25 @@ class AiriVoice(Star):
         # 更新排序缓存
         self.sorted_keys = sorted(self.voice_map.keys())
 
-    @filter.regex(r"^\s*.+\s*$")  # 宽松捕获所有非空消息（兼容两种模式）
+    @filter.regex(r"^\s*.+\s*$")  # 宽松捕获所有非空消息
     async def voice_handler(self, event: AstrMessageEvent):
         text = (event.message_str or "").strip()
         if not text:
             return
-
-        keyword = text  # 默认直接用全文作为关键词
-
-        # 根据配置判断是否需要前缀
+    
+        keyword = text  # 默认直接用全文
+    
+        # 如果配置是 prefix 模式，则检查前缀
         if self.trigger_mode == "prefix":
             match = re.search(r"^#voice\s+(.+)", text, re.I)
             if not match:
-                return  # 前缀模式下没匹配到 #voice 开头，直接放行
+                return  # 没匹配到 #voice 前缀，放行
             keyword = match.group(1).strip()
-
+    
         matched_path = self.voice_map.get(keyword)
         if matched_path is None:
-            # 可选：提示用户没找到（提升体验）
-            # yield event.plain_result(f"没找到 '{keyword}' 对应的语音哦～试试 /voice_list 查看列表？")
-            return
-
+            return  # 未匹配到关键词，放行
+    
         try:
             logger.info(f"[AiriVoice] 触发语音（模式: {self.trigger_mode}）：'{keyword}' → {matched_path}")
             chain = [Record.fromFileSystem(matched_path)]
