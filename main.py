@@ -102,8 +102,7 @@ class AiriVoice(Star):
         # 更新排序缓存
         self.sorted_keys = sorted(self.voice_map.keys())
 
-    @filter.any()
-    async def strict_keyword_voice_handler(self, event: AstrMessageEvent):
+    async def handle_message(self, event: AstrMessageEvent):
         """
         严格关键词触发方式：消息完全匹配关键词才触发
         """
