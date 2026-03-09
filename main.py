@@ -102,9 +102,9 @@ class AiriVoice(Star):
         # 更新排序缓存
         self.sorted_keys = sorted(self.voice_map.keys())
 
-    @filter.regex(r"^\s*\s+([^\s\u3000]+)\s*$")
+    @filter.regex(r"^\s*/v\s+([^\s\u3000]+)\s*$")
     async def voice_handler(self, event: AstrMessageEvent):
-        match = re.search(r"\s+(.+)", event.message_str.strip(), re.I)
+        match = re.search(r"/v\s+(.+)", event.message_str.strip(), re.I)
         if not match:
             return
 
