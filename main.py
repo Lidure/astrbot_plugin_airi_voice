@@ -102,28 +102,6 @@ class AiriVoice(Star):
         # 更新排序缓存
         self.sorted_keys = sorted(self.voice_map.keys())
 
-    @filter.regex(r"^\s*#voice\s+([^\s\u3000]+)\s*$")
-    async def voice_handler_with_prefix(self, event: AstrMessageEvent):
-        """
-        原有的带 #voice 前缀的触发方式
-        """
-        match = re.search(r"#voice\s+(.+)", event.message_str.strip(), re.I)
-        if not match:
-            return
-
-        text = match.group(1).strip()
-        matched_path = self.voice_map.get(text)
-        if matched_path is None:
-            return
-
-        try:
-            logger.info(f"[AiriVoice] 触发语音：'{text}' → {matched_path}")
-            chain = [Record.fromFileSystem(matched_path)]
-            yield event.chain_result(chain)
-        except Exception as e:
-            logger.error(f"[AiriVoice] 发送失败 '{text}': {str(e)}", exc_info=True)
-            yield event.plain_result(f"语音发送失败：{str(e)}")
-
     @filter.any()
     async def strict_keyword_voice_handler(self, event: AstrMessageEvent):
         """
@@ -186,7 +164,7 @@ class AiriVoice(Star):
         end = start + page_size
         page_keys = self.sorted_keys[start:end]
 
-        msg = f"❤️输入'#voice 关键词'或直接输入关键词触发❤️\n🌸可用语音关键词（第 {page}/{total_pages} 页，共 {total} 个）：\n"
+        msg = f"❤️直接输入关键词触发❤️\n🌸可用语音关键词（第 {page}/{total_pages} 页，共 {total} 个）：\n"
         for k in page_keys:
             msg += f"・ {k}\n"
 
