@@ -98,33 +98,33 @@ class AiriVoice(Star):
         self.sorted_keys = sorted(self.voice_map.keys())
 
     @filter.regex(r"^\s*.+\s*$")  # 宽松捕获所有非空消息（兼容两种模式）
-        async def voice_handler(self, event: AstrMessageEvent):
-            text = (event.message_str or "").strip()
-            if not text:
-                return
-    
-            keyword = text  # 默认直接用全文作为关键词
-    
-            # 根据配置判断是否需要前缀
-            if self.trigger_mode == "prefix":
-                match = re.search(r"^#voice\s+(.+)", text, re.I)
-                if not match:
-                    return  # 前缀模式下没匹配到 #voice 开头，直接放行
-                keyword = match.group(1).strip()
-    
-            matched_path = self.voice_map.get(keyword)
-            if matched_path is None:
-                # 可选：提示用户没找到（提升体验）
-                # yield event.plain_result(f"没找到 '{keyword}' 对应的语音哦～试试 /voice_list 查看列表？")
-                return
-    
-            try:
-                logger.info(f"[AiriVoice] 触发语音（模式: {self.trigger_mode}）：'{keyword}' → {matched_path}")
-                chain = [Record.fromFileSystem(matched_path)]
-                yield event.chain_result(chain)
-            except Exception as e:
-                logger.error(f"[AiriVoice] 发送失败 '{keyword}': {str(e)}", exc_info=True)
-                yield event.plain_result(f"语音发送失败：{str(e)}")
+    async def voice_handler(self, event: AstrMessageEvent):
+        text = (event.message_str or "").strip()
+        if not text:
+            return
+
+        keyword = text  # 默认直接用全文作为关键词
+
+        # 根据配置判断是否需要前缀
+        if self.trigger_mode == "prefix":
+            match = re.search(r"^#voice\s+(.+)", text, re.I)
+            if not match:
+                return  # 前缀模式下没匹配到 #voice 开头，直接放行
+            keyword = match.group(1).strip()
+
+        matched_path = self.voice_map.get(keyword)
+        if matched_path is None:
+            # 可选：提示用户没找到（提升体验）
+            # yield event.plain_result(f"没找到 '{keyword}' 对应的语音哦～试试 /voice_list 查看列表？")
+            return
+
+        try:
+            logger.info(f"[AiriVoice] 触发语音（模式: {self.trigger_mode}）：'{keyword}' → {matched_path}")
+            chain = [Record.fromFileSystem(matched_path)]
+            yield event.chain_result(chain)
+        except Exception as e:
+            logger.error(f"[AiriVoice] 发送失败 '{keyword}': {str(e)}", exc_info=True)
+            yield event.plain_result(f"语音发送失败：{str(e)}")
 
     @filter.command("voice_reload")
     async def reload_voices(self, event: AstrMessageEvent):
