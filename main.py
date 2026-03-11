@@ -1,4 +1,4 @@
-from astrbot.api.all import *
+from astrbot.api.star import Star, Context, register
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
 from pathlib import Path
