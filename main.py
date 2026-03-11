@@ -16,14 +16,14 @@ class AiriVoice(Star):
         self.voice_dir = self.plugin_dir / "voices"
     
         # 优先使用 context 提供的插件数据目录（如果有）
-        if hasattr(context, 'plugin_data_dir'):
-            self.data_dir = Path(context.plugin_data_dir)
-            logger.info("[AiriVoice] 使用 context.plugin_data_dir")
-        else:
-            # fallback：从插件目录向上爬到 AstrBot 根
-            # 结构：plugins/插件名/ → data/plugins/ → AstrBot/ → data/plugin_data/...
-            self.data_dir = self.plugin_dir.parent.parent.parent / "data" / "plugin_data" / "astrbot_plugin_airi_voice"
-            logger.warning("[AiriVoice] context 无 plugin_data_dir，使用 fallback 路径")
+        # if hasattr(context, 'plugin_data_dir'):
+        #     self.data_dir = Path(context.plugin_data_dir)
+        #     logger.info("[AiriVoice] 使用 context.plugin_data_dir")
+        # else:
+        #     # fallback：从插件目录向上爬到 AstrBot 根
+        #     # 结构：plugins/插件名/ → data/plugins/ → AstrBot/ → data/plugin_data/...
+        self.data_dir = self.plugin_dir.parent.parent.parent / "data" / "plugin_data" / "astrbot_plugin_airi_voice"
+        #     logger.warning("[AiriVoice] context 无 plugin_data_dir，使用 fallback 路径")
     
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
