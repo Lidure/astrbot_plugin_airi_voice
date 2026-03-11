@@ -20,14 +20,14 @@ class AiriVoice(Star):
         self.voice_dir = self.plugin_dir / "voices"
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         
-        # 配置
+        # 配置（来自 AstrBot 网页后台）
         self.config = config or {}
         self.trigger_mode = self.config.get("trigger_mode", "direct")
         if self.trigger_mode not in {"prefix", "direct"}:
             self.trigger_mode = "direct"
         
-        # 权限控制
-        self.admin_mode = self.config.get("admin_mode", "whitelist")  # whitelist / admin / all
+        # 权限控制（来自 AstrBot 网页配置）
+        self.admin_mode = self.config.get("admin_mode", "whitelist")
         self.admin_whitelist: Set[str] = set(self.config.get("admin_whitelist", []))
         
         # 语音映射
@@ -79,30 +79,30 @@ class AiriVoice(Star):
             return True
         
         if self.admin_mode == "admin":
-            # 尝试获取用户角色信息
-            user_info = getattr(event, 'user_info', None)
-            if user_info:
-                role = getattr(user_info, 'role', None) or (user_info.get('role') if isinstance(user_info, dict) else None)
-                if role in ('admin', 'owner', 'master'):
-                    return True
-            # 备选：检查 event 中的权限标记
+            # 检查 AstrBot 平台管理员权限
             if getattr(event, 'is_admin', False) or getattr(event, 'is_master', False):
                 return True
+            # 尝试从 user_info 获取角色
+            try:
+                role = event.get_platform_user_role()
+                if role in ('admin', 'owner', 'master'):
+                    return True
+            except Exception:
+                pass
             return False
         
         if self.admin_mode == "whitelist":
-            user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
-            if not user_id:
-                # 尝试从 message_obj 获取
-                try:
-                    user_id = event.message_obj.sender.user_id
-                except Exception:
-                    pass
+            # 获取用户 ID
+            user_id = None
+            try:
+                user_id = event.message_obj.sender.user_id
+            except Exception:
+                user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
             
             if user_id and str(user_id) in self.admin_whitelist:
                 return True
             
-            # 也检查 uname
+            # 也检查昵称
             uname = getattr(event, 'sender_name', None) or getattr(event, 'nickname', None)
             if uname and uname in self.admin_whitelist:
                 return True
@@ -146,7 +146,7 @@ class AiriVoice(Star):
     async def list_voices(self, event: AstrMessageEvent):
         """列出所有语音关键词"""
         if not self.sorted_keys:
-            yield event.plain_result("当前没有可用语音～\n将语音文件放入 plugins/airi_voice/voices/ 目录即可")
+            yield event.plain_result("当前没有可用语音～\n将语音文件放入 voices/ 目录或通过网页上传")
             return
 
         args = (event.message_str or "").strip().split()
@@ -194,9 +194,10 @@ class AiriVoice(Star):
         help_msg = f"""📦 AiriVoice 语音插件
 
 【使用方法】
-1. 将语音文件放入 plugins/airi_voice/voices/ 目录
-2. 文件名即为关键词（不含扩展名）
-3. 直接输入关键词即可发送语音
+1. 将语音文件放入 voices/ 目录
+2. 或在 AstrBot 网页后台 → 插件配置 → 上传语音
+3. 文件名即为关键词（不含扩展名）
+4. 直接输入关键词即可发送语音
 
 【触发模式】
 • direct: 直接输入关键词触发
@@ -205,23 +206,19 @@ class AiriVoice(Star):
 【命令】
 • /voice.list [页码] - 查看可用语音
 {f"• /voice.reload - 重新加载语音列表 (管理员)" if is_admin else ""}
-• /voice.help - 显示此帮助
-
-【网页配置】
-在配置中添加 extra_voice_pool，填入相对于 data/plugin_data/astrbot_plugin_airi_voice/extra_voices/ 的路径"""
+• /voice.help - 显示此帮助"""
         yield event.plain_result(help_msg)
 
     @filter.command("voice.check")
     async def check_permission(self, event: AstrMessageEvent):
         """检查当前用户权限（调试用）"""
         is_admin = self._check_admin(event)
-        user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
         
-        if not user_id:
-            try:
-                user_id = event.message_obj.sender.user_id
-            except Exception:
-                user_id = "未知"
+        user_id = None
+        try:
+            user_id = event.message_obj.sender.user_id
+        except Exception:
+            user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None) or "未知"
         
         msg = f"🔐 权限检查\n\n"
         msg += f"用户 ID: {user_id}\n"
@@ -229,6 +226,6 @@ class AiriVoice(Star):
         msg += f"是否有权限：{'✅ 是' if is_admin else '❌ 否'}\n"
         
         if self.admin_mode == "whitelist" and not is_admin:
-            msg += f"\n💡 提示：将您的用户 ID 添加到 admin_whitelist 即可获取权限"
+            msg += f"\n💡 提示：在 AstrBot 网页后台 → 插件配置 → admin_whitelist 中添加您的用户 ID"
         
         yield event.plain_result(msg)
