@@ -1,9 +1,11 @@
 from astrbot.api.star import Star, Context, register
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
+from astrbot.api.message_components import Record  # 添加这个导入
 from pathlib import Path
 from typing import Dict
 import re
+import os
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
 
@@ -15,16 +17,7 @@ class AiriVoice(Star):
         self.plugin_dir = Path(__file__).parent
         self.voice_dir = self.plugin_dir / "voices"
     
-        # 优先使用 context 提供的插件数据目录（如果有）
-        # if hasattr(context, 'plugin_data_dir'):
-        #     self.data_dir = Path(context.plugin_data_dir)
-        #     logger.info("[AiriVoice] 使用 context.plugin_data_dir")
-        # else:
-        #     # fallback：从插件目录向上爬到 AstrBot 根
-        #     # 结构：plugins/插件名/ → data/plugins/ → AstrBot/ → data/plugin_data/...
         self.data_dir = self.plugin_dir.parent.parent.parent / "data" / "plugin_data" / "astrbot_plugin_airi_voice"
-        #     logger.warning("[AiriVoice] context 无 plugin_data_dir，使用 fallback 路径")
-    
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
     
@@ -88,10 +81,10 @@ class AiriVoice(Star):
             try:
                 abs_path = (self.data_dir / rel_path).resolve()
                 if not abs_path.is_relative_to(data_dir_resolved):
-                    logger.warning(f"[AiriVoice] 检测到非法路径尝试: {rel_path} → {abs_path}")
+                    logger.warning(f"[AiriVoice] 检测到非法路径尝试：{rel_path} → {abs_path}")
                     continue
             except Exception as e:
-                logger.warning(f"[AiriVoice] 路径解析失败: {rel_path} - {e}")
+                logger.warning(f"[AiriVoice] 路径解析失败：{rel_path} - {e}")
                 continue
 
             if abs_path.exists() and abs_path.is_file():
@@ -105,7 +98,7 @@ class AiriVoice(Star):
                 loaded += 1
                 logger.info(f"[AiriVoice] 网页加载成功：'{keyword}' → {abs_path}")
             else:
-                logger.warning(f"[AiriVoice] 网页文件不存在：{abs_path} (相对: {rel_path})")
+                logger.warning(f"[AiriVoice] 网页文件不存在：{abs_path} (相对：{rel_path})")
 
         if loaded > 0:
             logger.info(f"[AiriVoice] 从网页配置加载 {loaded} 个额外语音")
@@ -118,7 +111,6 @@ class AiriVoice(Star):
         if not text:
             return
 
-        # 自动检测配置变化（网页上传后自动刷新）
         current_pool_len = len(self.config.get("extra_voice_pool", [])) if self.config else 0
         if current_pool_len > self.last_pool_len:
             logger.info("[AiriVoice] 检测到网页配置变化，自动刷新语音列表")
@@ -138,7 +130,7 @@ class AiriVoice(Star):
             return
 
         try:
-            logger.info(f"[AiriVoice] 触发语音（模式: {self.trigger_mode}）：'{keyword}' → {matched_path}")
+            logger.info(f"[AiriVoice] 触发语音（模式：{self.trigger_mode}）：'{keyword}' → {matched_path}")
             chain = [Record.fromFileSystem(matched_path)]
             yield event.chain_result(chain)
         except Exception as e:
@@ -148,54 +140,113 @@ class AiriVoice(Star):
     @filter.command("voice.add")
     async def add_voice(self, event: AstrMessageEvent):
         """引用一条语音消息 + voice.add 名字 → 保存为 silk 文件"""
-        # 打印 raw_message 调试
         logger.debug(f"[AiriVoice] raw_message: {getattr(event, 'raw_message', '无 raw_message')}")
-    
-        # 从 raw_message 提取 reply id
+        
+        # 检查是否有引用消息
         raw_msg = getattr(event, 'raw_message', '') or ''
+        
+        # 方法1：尝试从 CQ 码获取 reply id
         reply_match = re.search(r'\[CQ:reply,id=(\d+)\]', raw_msg)
-        if not reply_match:
+        reply_id = None
+        
+        if reply_match:
+            reply_id = int(reply_match.group(1))
+        else:
+            # 方法2：尝试从 event 对象获取引用信息
+            if hasattr(event, 'reply') and event.reply:
+                reply_id = event.reply.get('id') if isinstance(event.reply, dict) else getattr(event.reply, 'id', None)
+            elif hasattr(event, 'message') and event.message:
+                # 检查消息链中是否有 reply segment
+                for seg in event.message:
+                    if hasattr(seg, 'type') and seg.type == 'reply':
+                        reply_id = getattr(seg, 'id', None) or getattr(seg, 'seq', None)
+                        break
+        
+        if not reply_id:
             yield event.plain_result("请先引用（回复）一条语音消息，再使用 voice.add 名字\n（长按语音 → 回复/引用）")
             return
     
-        reply_id = int(reply_match.group(1))
         logger.info(f"[AiriVoice] 检测到引用消息 ID: {reply_id}")
     
         try:
             # 拉取被引用消息完整内容
             quoted_msg = await self.context.bot.get_msg(message_id=reply_id)
-            logger.debug(f"[AiriVoice] get_msg 成功: {quoted_msg}")
+            logger.debug(f"[AiriVoice] get_msg 成功：{quoted_msg}")
         except Exception as e:
-            logger.error(f"[AiriVoice] get_msg 失败: {e}")
-            yield event.plain_result("无法获取引用的消息内容，请稍后再试")
+            logger.error(f"[AiriVoice] get_msg 失败：{e}")
+            yield event.plain_result(f"无法获取引用的消息内容：{str(e)}，请稍后再试")
             return
     
-        # 从 quoted_msg 中找 record
-        voice_segment = None
-        # 假设 quoted_msg.message 是 CQ 码字符串或 list
+        # 从 quoted_msg 中提取语音文件
+        voice_data = None
+        voice_file_path = None
+        
+        # 获取消息内容
         quoted_raw = getattr(quoted_msg, 'message', '') or ''
+        logger.debug(f"[AiriVoice] quoted_msg.message 类型：{type(quoted_raw)}, 内容：{quoted_raw}")
+        
         if isinstance(quoted_raw, str):
             # 从 CQ 码字符串找 record
             record_match = re.search(r'\[CQ:record,file=([^,\]]+)', quoted_raw)
             if record_match:
                 file_id = record_match.group(1)
+                logger.info(f"[AiriVoice] 从 CQ 码找到语音 file_id: {file_id}")
                 try:
-                    voice_data = await self.context.bot.download_file(file_id)
-                    logger.info(f"[AiriVoice] 从 CQ 码下载语音 file_id: {file_id}")
+                    # download_file 可能返回文件路径或二进制数据
+                    result = await self.context.bot.download_file(file_id)
+                    logger.debug(f"[AiriVoice] download_file 返回类型：{type(result)}")
+                    
+                    if isinstance(result, str) and os.path.exists(result):
+                        # 返回的是文件路径
+                        voice_file_path = result
+                        logger.info(f"[AiriVoice] 语音文件路径：{voice_file_path}")
+                    elif isinstance(result, bytes):
+                        # 返回的是二进制数据
+                        voice_data = result
+                        logger.info(f"[AiriVoice] 语音数据大小：{len(voice_data)} bytes")
+                    else:
+                        yield event.plain_result("无法解析语音文件数据")
+                        return
                 except Exception as e:
-                    logger.error(f"[AiriVoice] 下载失败: {e}")
-                    yield event.plain_result("无法下载引用的语音文件")
+                    logger.error(f"[AiriVoice] 下载失败：{e}")
+                    yield event.plain_result(f"无法下载引用的语音文件：{str(e)}")
                     return
-                voice_data = voice_data
-        else:
+            else:
+                yield event.plain_result("引用的消息中没有找到语音（record）")
+                return
+        elif isinstance(quoted_raw, list):
             # 如果是 segment list
             for seg in quoted_raw:
-                if seg.type == 'record':
-                    voice_segment = seg
-                    break
-    
-        if 'voice_data' not in locals():
-            yield event.plain_result("引用的消息中没有语音或无法提取")
+                seg_type = getattr(seg, 'type', '') or (seg.get('type') if isinstance(seg, dict) else '')
+                if seg_type == 'record':
+                    # 获取 file_id 或 file 字段
+                    file_id = getattr(seg, 'file', None) or (seg.get('file') if isinstance(seg, dict) else None)
+                    if file_id:
+                        logger.info(f"[AiriVoice] 从 segment 找到语音 file_id: {file_id}")
+                        try:
+                            result = await self.context.bot.download_file(file_id)
+                            logger.debug(f"[AiriVoice] download_file 返回类型：{type(result)}")
+                            
+                            if isinstance(result, str) and os.path.exists(result):
+                                voice_file_path = result
+                            elif isinstance(result, bytes):
+                                voice_data = result
+                            else:
+                                yield event.plain_result("无法解析语音文件数据")
+                                return
+                            break
+                        except Exception as e:
+                            logger.error(f"[AiriVoice] 下载失败：{e}")
+                            yield event.plain_result(f"无法下载引用的语音文件：{str(e)}")
+                            return
+                    else:
+                        yield event.plain_result("引用的语音消息中没有找到 file 字段")
+                        return
+            else:
+                yield event.plain_result("引用的消息中没有找到语音（record）segment")
+                return
+        else:
+            yield event.plain_result(f"无法处理的消息格式：{type(quoted_raw)}")
             return
     
         # 提取名字
@@ -214,9 +265,19 @@ class AiriVoice(Star):
         save_path = self.voice_dir / save_name
     
         try:
-            with open(save_path, 'wb') as f:
-                f.write(voice_data)
-            logger.info(f"[AiriVoice] 成功保存语音：{save_name} → {save_path}")
+            if voice_file_path:
+                # 从文件路径复制
+                import shutil
+                shutil.copy2(voice_file_path, save_path)
+                logger.info(f"[AiriVoice] 从文件路径复制：{voice_file_path} → {save_path}")
+            elif voice_data:
+                # 从二进制数据写入
+                with open(save_path, 'wb') as f:
+                    f.write(voice_data)
+                logger.info(f"[AiriVoice] 从二进制数据保存：{save_name} → {save_path}")
+            else:
+                yield event.plain_result("没有获取到语音数据")
+                return
     
             keyword = name.strip()
             if keyword in self.voice_map:
@@ -226,7 +287,7 @@ class AiriVoice(Star):
     
             yield event.plain_result(f"已保存语音为 '{keyword}'！\n后续直接输入 {keyword} 即可触发发送～")
         except Exception as e:
-            logger.error(f"[AiriVoice] 保存失败: {e}", exc_info=True)
+            logger.error(f"[AiriVoice] 保存失败：{e}", exc_info=True)
             yield event.plain_result(f"保存失败：{str(e)}")
 
     @filter.command("voice.list")
