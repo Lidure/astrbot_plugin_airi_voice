@@ -1,7 +1,7 @@
 from astrbot.api.all import *
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
-from astrbot.core.star.star_tools import StarTools
+
 from pathlib import Path
 from typing import Dict
 import re
