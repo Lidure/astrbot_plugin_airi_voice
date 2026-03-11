@@ -1,11 +1,12 @@
 from astrbot.api.star import Star, Context, register
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
-from astrbot.api.message_components import Record  # 添加这个导入
+from astrbot.api.message_components import Record, Reply
 from pathlib import Path
 from typing import Dict
 import re
 import os
+import shutil
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
 
@@ -105,6 +106,45 @@ class AiriVoice(Star):
 
         self.sorted_keys = sorted(self.voice_map.keys())
 
+    def _get_reply_id(self, event: AstrMessageEvent) -> int | None:
+        """从事件中提取引用消息 ID"""
+        # 方法 1：从 message_obj.message 消息链中查找 reply segment
+        try:
+            message_chain = getattr(event, 'message_obj', None)
+            if message_chain:
+                messages = getattr(message_chain, 'message', [])
+                for seg in messages:
+                    seg_type = getattr(seg, 'type', '')
+                    if seg_type == 'reply':
+                        # 尝试多个可能的属性名
+                        reply_id = getattr(seg, 'target_id', None) or getattr(seg, 'id', None) or getattr(seg, 'seq', None)
+                        if reply_id:
+                            logger.debug(f"[AiriVoice] 从消息链找到引用 ID: {reply_id}")
+                            return int(reply_id)
+        except Exception as e:
+            logger.debug(f"[AiriVoice] 从消息链获取引用 ID 失败：{e}")
+        
+        # 方法 2：从 raw_message 中解析 CQ 码（兼容旧方式）
+        raw_msg = getattr(event, 'raw_message', '') or ''
+        reply_match = re.search(r'\[CQ:reply,id=(\d+)\]', raw_msg)
+        if reply_match:
+            reply_id = int(reply_match.group(1))
+            logger.debug(f"[AiriVoice] 从 CQ 码找到引用 ID: {reply_id}")
+            return reply_id
+        
+        # 方法 3：检查 event.reply 属性
+        reply = getattr(event, 'reply', None)
+        if reply:
+            if isinstance(reply, dict):
+                reply_id = reply.get('id') or reply.get('message_id') or reply.get('seq')
+            else:
+                reply_id = getattr(reply, 'id', None) or getattr(reply, 'message_id', None) or getattr(reply, 'seq', None)
+            if reply_id:
+                logger.debug(f"[AiriVoice] 从 event.reply 找到引用 ID: {reply_id}")
+                return int(reply_id)
+        
+        return None
+
     @filter.regex(r"^\s*.+\s*$")
     async def voice_handler(self, event: AstrMessageEvent):
         text = (event.message_str or "").strip()
@@ -140,27 +180,8 @@ class AiriVoice(Star):
     @filter.command("voice.add")
     async def add_voice(self, event: AstrMessageEvent):
         """引用一条语音消息 + voice.add 名字 → 保存为 silk 文件"""
-        logger.debug(f"[AiriVoice] raw_message: {getattr(event, 'raw_message', '无 raw_message')}")
-        
-        # 检查是否有引用消息
-        raw_msg = getattr(event, 'raw_message', '') or ''
-        
-        # 方法1：尝试从 CQ 码获取 reply id
-        reply_match = re.search(r'\[CQ:reply,id=(\d+)\]', raw_msg)
-        reply_id = None
-        
-        if reply_match:
-            reply_id = int(reply_match.group(1))
-        else:
-            # 方法2：尝试从 event 对象获取引用信息
-            if hasattr(event, 'reply') and event.reply:
-                reply_id = event.reply.get('id') if isinstance(event.reply, dict) else getattr(event.reply, 'id', None)
-            elif hasattr(event, 'message') and event.message:
-                # 检查消息链中是否有 reply segment
-                for seg in event.message:
-                    if hasattr(seg, 'type') and seg.type == 'reply':
-                        reply_id = getattr(seg, 'id', None) or getattr(seg, 'seq', None)
-                        break
+        # 获取引用消息 ID
+        reply_id = self._get_reply_id(event)
         
         if not reply_id:
             yield event.plain_result("请先引用（回复）一条语音消息，再使用 voice.add 名字\n（长按语音 → 回复/引用）")
@@ -183,7 +204,7 @@ class AiriVoice(Star):
         
         # 获取消息内容
         quoted_raw = getattr(quoted_msg, 'message', '') or ''
-        logger.debug(f"[AiriVoice] quoted_msg.message 类型：{type(quoted_raw)}, 内容：{quoted_raw}")
+        logger.debug(f"[AiriVoice] quoted_msg.message 类型：{type(quoted_raw)}")
         
         if isinstance(quoted_raw, str):
             # 从 CQ 码字符串找 record
@@ -192,16 +213,13 @@ class AiriVoice(Star):
                 file_id = record_match.group(1)
                 logger.info(f"[AiriVoice] 从 CQ 码找到语音 file_id: {file_id}")
                 try:
-                    # download_file 可能返回文件路径或二进制数据
                     result = await self.context.bot.download_file(file_id)
                     logger.debug(f"[AiriVoice] download_file 返回类型：{type(result)}")
                     
                     if isinstance(result, str) and os.path.exists(result):
-                        # 返回的是文件路径
                         voice_file_path = result
                         logger.info(f"[AiriVoice] 语音文件路径：{voice_file_path}")
                     elif isinstance(result, bytes):
-                        # 返回的是二进制数据
                         voice_data = result
                         logger.info(f"[AiriVoice] 语音数据大小：{len(voice_data)} bytes")
                     else:
@@ -219,7 +237,6 @@ class AiriVoice(Star):
             for seg in quoted_raw:
                 seg_type = getattr(seg, 'type', '') or (seg.get('type') if isinstance(seg, dict) else '')
                 if seg_type == 'record':
-                    # 获取 file_id 或 file 字段
                     file_id = getattr(seg, 'file', None) or (seg.get('file') if isinstance(seg, dict) else None)
                     if file_id:
                         logger.info(f"[AiriVoice] 从 segment 找到语音 file_id: {file_id}")
@@ -266,12 +283,9 @@ class AiriVoice(Star):
     
         try:
             if voice_file_path:
-                # 从文件路径复制
-                import shutil
                 shutil.copy2(voice_file_path, save_path)
                 logger.info(f"[AiriVoice] 从文件路径复制：{voice_file_path} → {save_path}")
             elif voice_data:
-                # 从二进制数据写入
                 with open(save_path, 'wb') as f:
                     f.write(voice_data)
                 logger.info(f"[AiriVoice] 从二进制数据保存：{save_name} → {save_path}")
