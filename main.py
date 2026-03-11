@@ -3,14 +3,14 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
 from astrbot.api.message_components import Record
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set
 import re
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
 PAGE_SIZE = 25
 
 
-@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.0", "https://github.com/Lidure/astrbot_plugin_airi_voice")
+@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.1", "https://github.com/Lidure/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -26,6 +26,10 @@ class AiriVoice(Star):
         if self.trigger_mode not in {"prefix", "direct"}:
             self.trigger_mode = "direct"
         
+        # 权限控制
+        self.admin_mode = self.config.get("admin_mode", "whitelist")  # whitelist / admin / all
+        self.admin_whitelist: Set[str] = set(self.config.get("admin_whitelist", []))
+        
         # 语音映射
         self.voice_map: Dict[str, str] = {}
         self.sorted_keys: List[str] = []
@@ -34,7 +38,7 @@ class AiriVoice(Star):
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
         
         self._load_voices()
-        logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音")
+        logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}")
 
     def _load_voices(self):
         """加载所有语音文件"""
@@ -67,6 +71,45 @@ class AiriVoice(Star):
                 keyword = abs_path.stem.strip()
                 if keyword:
                     self.voice_map[keyword] = str(abs_path)
+
+    def _check_admin(self, event: AstrMessageEvent) -> bool:
+        """检查用户是否有管理员权限"""
+        # 模式：all = 所有人，admin = 平台管理员，whitelist = 白名单
+        if self.admin_mode == "all":
+            return True
+        
+        if self.admin_mode == "admin":
+            # 尝试获取用户角色信息
+            user_info = getattr(event, 'user_info', None)
+            if user_info:
+                role = getattr(user_info, 'role', None) or (user_info.get('role') if isinstance(user_info, dict) else None)
+                if role in ('admin', 'owner', 'master'):
+                    return True
+            # 备选：检查 event 中的权限标记
+            if getattr(event, 'is_admin', False) or getattr(event, 'is_master', False):
+                return True
+            return False
+        
+        if self.admin_mode == "whitelist":
+            user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
+            if not user_id:
+                # 尝试从 message_obj 获取
+                try:
+                    user_id = event.message_obj.sender.user_id
+                except Exception:
+                    pass
+            
+            if user_id and str(user_id) in self.admin_whitelist:
+                return True
+            
+            # 也检查 uname
+            uname = getattr(event, 'sender_name', None) or getattr(event, 'nickname', None)
+            if uname and uname in self.admin_whitelist:
+                return True
+            
+            return False
+        
+        return False
 
     @filter.regex(r"^\s*.+\s*$")
     async def voice_handler(self, event: AstrMessageEvent):
@@ -134,7 +177,11 @@ class AiriVoice(Star):
 
     @filter.command("voice.reload")
     async def reload_voices(self, event: AstrMessageEvent):
-        """重新加载语音列表"""
+        """重新加载语音列表（需要管理员权限）"""
+        if not self._check_admin(event):
+            yield event.plain_result("❌ 权限不足：此命令仅限管理员使用")
+            return
+        
         self._load_voices()
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
         yield event.plain_result(f"✅ 已重新加载，共 {len(self.voice_map)} 个语音")
@@ -142,7 +189,9 @@ class AiriVoice(Star):
     @filter.command("voice.help")
     async def help(self, event: AstrMessageEvent):
         """显示帮助信息"""
-        help_msg = """📦 AiriVoice 语音插件
+        is_admin = self._check_admin(event)
+        
+        help_msg = f"""📦 AiriVoice 语音插件
 
 【使用方法】
 1. 将语音文件放入 plugins/airi_voice/voices/ 目录
@@ -155,9 +204,31 @@ class AiriVoice(Star):
 
 【命令】
 • /voice.list [页码] - 查看可用语音
-• /voice.reload - 重新加载语音列表
+{f"• /voice.reload - 重新加载语音列表 (管理员)" if is_admin else ""}
 • /voice.help - 显示此帮助
 
 【网页配置】
 在配置中添加 extra_voice_pool，填入相对于 data/plugin_data/astrbot_plugin_airi_voice/extra_voices/ 的路径"""
         yield event.plain_result(help_msg)
+
+    @filter.command("voice.check")
+    async def check_permission(self, event: AstrMessageEvent):
+        """检查当前用户权限（调试用）"""
+        is_admin = self._check_admin(event)
+        user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
+        
+        if not user_id:
+            try:
+                user_id = event.message_obj.sender.user_id
+            except Exception:
+                user_id = "未知"
+        
+        msg = f"🔐 权限检查\n\n"
+        msg += f"用户 ID: {user_id}\n"
+        msg += f"权限模式：{self.admin_mode}\n"
+        msg += f"是否有权限：{'✅ 是' if is_admin else '❌ 否'}\n"
+        
+        if self.admin_mode == "whitelist" and not is_admin:
+            msg += f"\n💡 提示：将您的用户 ID 添加到 admin_whitelist 即可获取权限"
+        
+        yield event.plain_result(msg)
