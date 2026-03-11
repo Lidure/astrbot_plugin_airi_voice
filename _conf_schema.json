@@ -1,15 +1,28 @@
 {
-  "extra_voice_pool": {
-    "description": "额外语音文件池（网页上传）",
-    "hint": "上传 mp3/wav 等文件，文件名（去后缀）作为触发关键词。支持多文件上传。",
-    "type": "file",
-    "default": []
-  },
   "trigger_mode": {
     "description": "触发模式",
     "type": "string",
     "hint": "prefix: 必须用 #voice 前缀；direct: 直接输入关键词",
     "default": "direct",
     "options": ["direct", "prefix"]
+  },
+  "admin_mode": {
+    "description": "管理命令权限模式",
+    "type": "string",
+    "hint": "all: 所有人可用；admin: 仅平台管理员；whitelist: 仅白名单用户",
+    "default": "whitelist",
+    "options": ["all", "admin", "whitelist"]
+  },
+  "admin_whitelist": {
+    "description": "管理员白名单",
+    "type": "text",
+    "hint": "每行一个用户 ID 或昵称，仅当 admin_mode 为 whitelist 时生效",
+    "default": ""
+  },
+  "extra_voice_pool": {
+    "description": "额外语音文件池（网页上传）",
+    "hint": "上传 mp3/wav 等文件，文件名（去后缀）作为触发关键词。支持多文件上传。",
+    "type": "file",
+    "default": []
   }
 }
