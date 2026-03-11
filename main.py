@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Dict
 import re
 
+AUDIO_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
+
 @register("airi_voice", "lidure", "输入关键词发送对应语音（本地 + 网页上传）", "1.4", "https://github.com/Lidure/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
@@ -56,7 +58,6 @@ class AiriVoice(Star):
 
     def _load_web_voices(self, config: dict = None):
         """从网页配置加载额外语音（使用相对路径拼接）"""
-        ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
         if config is None:
             logger.info("[AiriVoice] 未收到 config，不加载网页语音")
             return
