@@ -1,9 +1,9 @@
-from astrbot.api.star import Star, Context, register
+from astrbot.api.star import Star, Context, register, StarTools
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
 from astrbot.api.message_components import Record
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 import re
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
@@ -15,13 +15,13 @@ class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
         
-        # 路径初始化
+        # 路径初始化 - 使用框架规范 API
         self.plugin_dir = Path(__file__).parent
         self.voice_dir = self.plugin_dir / "voices"
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         
-        # 插件数据目录（网页上传的语音存储位置）
-        self.data_dir = self.plugin_dir.parent.parent.parent / "data" / "plugin_data" / "astrbot_plugin_airi_voice"
+        # 使用 StarTools 获取规范的数据目录
+        self.data_dir = StarTools.get_data_dir("astrbot_plugin_airi_voice")
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
         
@@ -60,6 +60,16 @@ class AiriVoice(Star):
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
         
         logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}")
+
+    def _get_user_id(self, event: AstrMessageEvent) -> Optional[str]:
+        """从事件中安全提取用户 ID"""
+        try:
+            return event.message_obj.sender.user_id
+        except AttributeError:
+            pass
+        
+        user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
+        return str(user_id) if user_id else None
 
     def _load_local_voices(self):
         """加载本地 voices 目录的语音"""
@@ -100,7 +110,7 @@ class AiriVoice(Star):
                 if not abs_path.is_relative_to(data_dir_resolved):
                     logger.warning(f"[AiriVoice] 检测到非法路径：{rel_path}")
                     continue
-            except Exception as e:
+            except (ValueError, OSError) as e:
                 logger.warning(f"[AiriVoice] 路径解析失败：{rel_path} - {e}")
                 continue
             
@@ -132,18 +142,13 @@ class AiriVoice(Star):
                 role = event.get_platform_user_role()
                 if role in ('admin', 'owner', 'master'):
                     return True
-            except Exception:
+            except AttributeError:
                 pass
             return False
         
         if self.admin_mode == "whitelist":
-            user_id = None
-            try:
-                user_id = event.message_obj.sender.user_id
-            except Exception:
-                user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
-            
-            if user_id and str(user_id) in self.admin_whitelist:
+            user_id = self._get_user_id(event)
+            if user_id and user_id in self.admin_whitelist:
                 return True
             
             uname = getattr(event, 'sender_name', None) or getattr(event, 'nickname', None)
@@ -182,9 +187,12 @@ class AiriVoice(Star):
             try:
                 yield event.chain_result([Record.fromFileSystem(matched_path)])
                 logger.debug(f"[AiriVoice] 发送语音：'{keyword}'")
+            except FileNotFoundError as e:
+                logger.error(f"[AiriVoice] 文件不存在 '{keyword}': {e}")
+                yield event.plain_result(f"语音文件不存在")
             except Exception as e:
                 logger.error(f"[AiriVoice] 发送失败 '{keyword}': {e}")
-                yield event.plain_result(f"语音发送失败：{e}")
+                yield event.plain_result(f"语音发送失败：{type(e).__name__}")
 
     @filter.command("voice.list")
     async def list_voices(self, event: AstrMessageEvent):
@@ -238,6 +246,14 @@ class AiriVoice(Star):
         """显示帮助信息"""
         is_admin = self._check_admin(event)
         
+        # 构建命令列表（避免空行问题）
+        commands = [
+            "• /voice.list [页码] - 查看可用语音",
+            "• /voice.help - 显示此帮助",
+        ]
+        if is_admin:
+            commands.append("• /voice.reload - 重新加载语音列表 (管理员)")
+        
         help_msg = f"""📦 AiriVoice 语音插件
 
 【使用方法】
@@ -251,21 +267,15 @@ class AiriVoice(Star):
 • prefix: 使用 #voice 关键词 触发
 
 【命令】
-• /voice.list [页码] - 查看可用语音
-{f"• /voice.reload - 重新加载语音列表 (管理员)" if is_admin else ""}
-• /voice.help - 显示此帮助"""
+{chr(10).join(commands)}"""
+        
         yield event.plain_result(help_msg)
 
     @filter.command("voice.check")
     async def check_permission(self, event: AstrMessageEvent):
         """检查当前用户权限（调试用）"""
         is_admin = self._check_admin(event)
-        
-        user_id = None
-        try:
-            user_id = event.message_obj.sender.user_id
-        except Exception:
-            user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None) or "未知"
+        user_id = self._get_user_id(event) or "未知"
         
         msg = f"🔐 权限检查\n\n"
         msg += f"用户 ID: {user_id}\n"
