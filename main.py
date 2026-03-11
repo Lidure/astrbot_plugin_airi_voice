@@ -1,7 +1,6 @@
 from astrbot.api.all import *
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
-
 from pathlib import Path
 from typing import Dict
 import re
@@ -19,12 +18,17 @@ class AiriVoice(Star):
         # 优先使用 context 提供的插件数据目录（最兼容）
         if hasattr(context, 'plugin_data_dir'):
             self.data_dir = Path(context.plugin_data_dir)
+            logger.info("[AiriVoice] 使用 context.plugin_data_dir")
         else:
-            # fallback：动态计算（适用于大多数情况）
+            # fallback：从插件目录向上爬到 AstrBot 根，再进 data/plugin_data
+            # 你的结构：plugins/插件名/ → data/plugins/ → AstrBot/ → data/
             self.data_dir = self.plugin_dir.parent.parent / "data" / "plugin_data" / "astrbot_plugin_airi_voice"
-        
+            logger.warning("[AiriVoice] context 无 plugin_data_dir，使用 fallback 路径")
+    
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
+    
+        logger.info(f"[AiriVoice] 数据目录：{self.data_dir}")
     
         # 其余代码不变...
         self.voice_map: Dict[str, str] = {}
