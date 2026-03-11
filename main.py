@@ -10,7 +10,7 @@ ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
 PAGE_SIZE = 25
 
 
-@register("airi_voice", "lidure", "输入关键词发送对应语音", "1.5", "https://github.com/Lidure/astrbot_plugin_airi_voice")
+@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.3", "https://github.com/Lidure/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -57,6 +57,8 @@ class AiriVoice(Star):
         # 加载语音
         self._load_local_voices()
         self._load_web_voices(self.config)
+        self._update_sorted_keys()  # ✅ 修复：初始化后更新排序列表
+        
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
         
         logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}")
@@ -64,12 +66,23 @@ class AiriVoice(Star):
     def _get_user_id(self, event: AstrMessageEvent) -> Optional[str]:
         """从事件中安全提取用户 ID"""
         try:
+            # ✅ 修复：使用框架规范方法
+            return event.get_sender_id()
+        except (AttributeError, TypeError):
+            pass
+        
+        # fallback：兼容旧版本
+        try:
             return event.message_obj.sender.user_id
         except AttributeError:
             pass
         
         user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
         return str(user_id) if user_id else None
+
+    def _update_sorted_keys(self):
+        """更新排序后的语音关键词列表"""
+        self.sorted_keys = sorted(self.voice_map.keys())
 
     def _load_local_voices(self):
         """加载本地 voices 目录的语音"""
@@ -171,6 +184,7 @@ class AiriVoice(Star):
         if current_pool_len > self.last_pool_len:
             logger.info("[AiriVoice] 检测到网页配置变化，自动刷新语音列表")
             self._load_web_voices(self.config)
+            self._update_sorted_keys()  # ✅ 修复：热更新后同步排序列表
             self.last_pool_len = current_pool_len
 
         # 获取关键词
@@ -236,7 +250,7 @@ class AiriVoice(Star):
         
         self._load_local_voices()
         self._load_web_voices(self.config)
-        self.sorted_keys = sorted(self.voice_map.keys())
+        self._update_sorted_keys()  # ✅ 修复：重新加载后更新排序列表
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
         
         yield event.plain_result(f"✅ 已重新加载，共 {len(self.voice_map)} 个语音")
