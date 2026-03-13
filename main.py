@@ -151,21 +151,21 @@ class AiriVoice(Star):
 
         
     def _load_user_added_voices(self):
-    """加载用户通过 voice.add 添加的语音"""
-    count = 0
-    for file_path in self.user_added_dir.iterdir():
-        if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXT:
-            keyword = file_path.stem.strip()
-            if keyword in self.voice_map:
-                logger.warning(f"[AiriVoice] 用户添加关键词冲突：'{keyword}' 已存在，将覆盖")
-            self.voice_map[keyword] = str(file_path)
-            count += 1
-            logger.debug(f"[AiriVoice] 用户添加加载：'{keyword}' → {file_path}")
-
-    if count > 0:
-        logger.info(f"[AiriVoice] 从用户添加目录加载 {count} 个语音")
-
-    self.sorted_keys = sorted(self.voice_map.keys())
+        """加载用户通过 voice.add 添加的语音"""
+        count = 0
+        for file_path in self.user_added_dir.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXT:
+                keyword = file_path.stem.strip()
+                if keyword in self.voice_map:
+                    logger.warning(f"[AiriVoice] 用户添加关键词冲突：'{keyword}' 已存在，将覆盖")
+                self.voice_map[keyword] = str(file_path)
+                count += 1
+                logger.debug(f"[AiriVoice] 用户添加加载：'{keyword}' → {file_path}")
+    
+        if count > 0:
+            logger.info(f"[AiriVoice] 从用户添加目录加载 {count} 个语音")
+    
+        self.sorted_keys = sorted(self.voice_map.keys())
     
     def _get_file_ext_from_url(self, url: str) -> str:
         """根据 URL 推断文件扩展名"""
