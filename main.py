@@ -1,20 +1,18 @@
-from astrbot.api.star import Star, Context, register
+from astrbot.api.star import Star, Context, register, StarTools
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
 from astrbot.api.message_components import Record, Reply
-from astrbot.api import get_astrbot_data_path, get_astrbot_plugin_path
 from pathlib import Path
 from typing import Dict, List, Set, Optional
 import re
 import aiohttp
-import os
 
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
 PAGE_SIZE = 25
 
 
-@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.4", "https://github.com/Lidure/astrbot_plugin_airi_voice")
+@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.3", "https://github.com/Lidure/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -24,8 +22,8 @@ class AiriVoice(Star):
         self.voice_dir = self.plugin_dir / "voices"
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         
-        # 使用 astrbot.api 获取数据目录
-        self.data_dir = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_airi_voice"
+        # 使用 StarTools 获取规范的数据目录
+        self.data_dir = StarTools.get_data_dir("astrbot_plugin_airi_voice")
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
         
