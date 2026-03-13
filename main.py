@@ -141,7 +141,7 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             )
 
         try:
-            await event.chain_result([Record.fromFileSystem(path)])
+            event.chain_result([Record.fromFileSystem(path)])
             logger.debug(f"[AiriVoice] LLM 工具发送语音：'{name}' → {path}")
             return f"已向当前会话发送语音「{name}」。"
         except FileNotFoundError as e:
