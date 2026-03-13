@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 import re
@@ -35,7 +33,7 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
             "required": [],
         }
     )
-    plugin: "AiriVoice" | None = None
+    plugin: Optional["AiriVoice"] = None
 
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
@@ -67,7 +65,7 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
             "required": ["keyword"],
         }
     )
-    plugin: "AiriVoice" | None = None
+    plugin: Optional["AiriVoice"] = None
 
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
@@ -115,7 +113,7 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             "required": ["name"],
         }
     )
-    plugin: "AiriVoice" | None = None
+    plugin: Optional["AiriVoice"] = None
 
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
