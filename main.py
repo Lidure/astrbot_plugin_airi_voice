@@ -2,12 +2,11 @@ from astrbot.api.star import Star, Context, register
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
 from astrbot.api.message_components import Record, Reply
-from astrbot.api import get_astrbot_data_path, get_astrbot_plugin_path
+from astrbot.api import get_astrbot_data_path
 from pathlib import Path
 from typing import Dict, List, Set, Optional
 import re
 import aiohttp
-import os
 
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
@@ -25,7 +24,12 @@ class AiriVoice(Star):
         self.voice_dir.mkdir(parents=True, exist_ok=True)
         
         # 使用 astrbot.api 获取数据目录
-        self.data_dir = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_airi_voice"
+        try:
+            self.data_dir = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_airi_voice"
+        except Exception:
+            # 降级方案：使用插件目录下的 data 文件夹
+            self.data_dir = self.plugin_dir / "data"
+        
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
         
@@ -160,6 +164,8 @@ class AiriVoice(Star):
     def _load_local_voices(self):
         """加载本地 voices 目录的语音"""
         count = 0
+        if not self.voice_dir.exists():
+            return
         for file_path in self.voice_dir.iterdir():
             if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXT:
                 keyword = file_path.stem.strip()
