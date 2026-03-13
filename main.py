@@ -1,411 +1,476 @@
-import os
-import json
-import aiohttp
-import re
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-
-# AstrBot v4+ 核心导入
+from astrbot.api.star import Star, Context, register, StarTools
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.platform import MessageType
+from astrbot.api.message_components import Record, Reply
+from pathlib import Path
+from typing import Dict, List, Set, Optional
+import re
+import aiohttp
 
-# ================= 插件元数据 =================
-__plugin_name__ = "airi_voice"
-__version__ = "2.5.1-Fix"
-__author__ = "lidure"
-__description__ = "爱理语音插件：支持关键词触发、引用添加语音、自动保存配置到本地。"
 
-# ================= 全局状态 =================
-# 这些变量将在 init_plugin 中初始化
-PLUGIN_PATH: Optional[Path] = None
-DATA_DIR: Optional[Path] = None
-EXTRA_VOICE_DIR: Optional[Path] = None
-CONFIG: Dict[str, Any] = {}
-VOICE_MAP: Dict[str, str] = {}  # {keyword: file_path}
+ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
+PAGE_SIZE = 25
 
-# ================= 配置管理 =================
 
-def _get_config_path() -> Path:
-    """获取配置文件路径"""
-    return PLUGIN_PATH / "config.json"
+@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.0", "https://github.com/Lidure/astrbot_plugin_airi_voice")
+class AiriVoice(Star):
+    def __init__(self, context: Context, config: dict = None):
+        super().__init__(context)
+        
+        # 路径初始化 - 使用框架规范 API
+        self.plugin_dir = Path(__file__).parent
+        self.voice_dir = self.plugin_dir / "voices"
+        self.voice_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 使用 StarTools 获取规范的数据目录
+        self.data_dir = StarTools.get_data_dir("astrbot_plugin_airi_voice")
+        self.extra_voice_dir = self.data_dir / "extra_voices"
+        self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"[AiriVoice] 数据目录：{self.data_dir}")
+        
+        # 配置
+        self.config = config or {}
+        self.trigger_mode = self.config.get("trigger_mode", "direct")
+        if self.trigger_mode not in {"prefix", "direct"}:
+            logger.warning(f"[AiriVoice] 无效 trigger_mode，强制使用 direct")
+            self.trigger_mode = "direct"
+        
+        # 权限控制
+        self.admin_mode = self.config.get("admin_mode", "whitelist")
+        if self.admin_mode not in {"all", "admin", "whitelist"}:
+            self.admin_mode = "whitelist"
+        
+        # 解析白名单（支持多行文本）
+        whitelist_raw = self.config.get("admin_whitelist", "")
+        if isinstance(whitelist_raw, str):
+            self.admin_whitelist: Set[str] = set(
+                line.strip() for line in whitelist_raw.splitlines() if line.strip()
+            )
+        elif isinstance(whitelist_raw, list):
+            self.admin_whitelist: Set[str] = set(str(x).strip() for x in whitelist_raw if str(x).strip())
+        else:
+            self.admin_whitelist: Set[str] = set()
+        
+        # 语音映射
+        self.voice_map: Dict[str, str] = {}
+        self.sorted_keys: List[str] = []
+        
+        # 加载语音
+        self._load_local_voices()
+        self._load_web_voices(self.config)
+        self._update_sorted_keys()
+        
+        self.last_pool_len = len(self.config.get("extra_voice_pool", []))
+        
+        logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}")
 
-def load_config():
-    """加载配置，如果不存在则创建默认配置"""
-    global CONFIG
-    config_path = _get_config_path()
-    
-    if config_path.exists():
+    def _get_user_id(self, event: AstrMessageEvent) -> Optional[str]:
+        """从事件中安全提取用户 ID"""
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                CONFIG = json.load(f)
-            logger.info(f"[{__plugin_name__}] 配置加载成功")
+            return event.get_sender_id()
+        except (AttributeError, TypeError):
+            pass
+        
+        try:
+            return event.message_obj.sender.user_id
+        except AttributeError:
+            pass
+        
+        user_id = getattr(event, 'sender_id', None) or getattr(event, 'user_id', None)
+        return str(user_id) if user_id else None
+
+    def _get_reply_id(self, event: AstrMessageEvent) -> Optional[int]:
+        """获取被引用消息的 ID"""
+        for seg in event.get_messages():
+            if isinstance(seg, Reply):
+                try:
+                    return int(seg.id)
+                except (ValueError, TypeError):
+                    pass
+        return None
+
+    async def _get_audio_url(self, event: AstrMessageEvent) -> Optional[str]:
+        """从引用消息中获取音频 URL"""
+        chain = event.get_messages()
+        url = None
+
+        def extract_media_url(seg):
+            url_ = (
+                getattr(seg, "url", None)
+                or getattr(seg, "file", None)
+                or getattr(seg, "path", None)
+            )
+            return url_ if url_ and str(url_).startswith("http") else None
+
+        # 遍历引用消息的 chain
+        reply_seg = next((seg for seg in chain if isinstance(seg, Reply)), None)
+        if reply_seg and hasattr(reply_seg, 'chain') and reply_seg.chain:
+            for seg in reply_seg.chain:
+                if isinstance(seg, Record):
+                    url = extract_media_url(seg)
+                    if url:
+                        break
+
+        # 从原始引用消息中获取（通过 bot API）
+        if url is None and hasattr(event, 'bot'):
+            if msg_id := self._get_reply_id(event):
+                try:
+                    raw = await event.bot.get_msg(message_id=msg_id)
+                    messages = raw.get("message", [])
+                    for seg in messages:
+                        if isinstance(seg, dict) and seg.get("type") == "record":
+                            if seg_url := seg.get("data", {}).get("url"):
+                                url = seg_url
+                                break
+                except Exception as e:
+                    logger.error(f"[AiriVoice] 获取引用消息失败：{e}")
+
+        return url
+
+    async def _download_audio(self, url: str) -> Optional[bytes]:
+        """下载音频文件"""
+        try:
+            async with aiohttp.ClientSession() as client:
+                response = await client.get(url)
+                return await response.read()
         except Exception as e:
-            logger.error(f"[{__plugin_name__}] 配置文件损坏，重置为默认: {e}")
-            CONFIG = _get_default_config()
-            save_config()
-    else:
-        CONFIG = _get_default_config()
-        save_config()
-        logger.info(f"[{__plugin_name__}] 创建新配置文件")
+            logger.error(f"[AiriVoice] 下载音频失败：{e}")
+            return None
 
-def _get_default_config() -> Dict[str, Any]:
-    """返回默认配置字典"""
-    return {
-        "extra_voice_pool": [],       # 用户添加的语音关键词列表
-        "trigger_mode": "direct",     # direct: 直接发送关键词; prefix: 需要 #voice 前缀
-        "admin_mode": "whitelist",    # all: 所有人; admin: 仅管理员; whitelist: 白名单
-        "admin_whitelist": []         # 白名单用户ID或昵称
-    }
+    def _get_file_ext_from_url(self, url: str) -> str:
+        """根据 URL 推断文件扩展名"""
+        url_lower = url.lower()
+        if ".wav" in url_lower:
+            return ".wav"
+        elif ".ogg" in url_lower:
+            return ".ogg"
+        elif ".silk" in url_lower:
+            return ".silk"
+        elif ".amr" in url_lower:
+            return ".amr"
+        return ".mp3"  # 默认
 
-def save_config():
-    """将当前配置保存到磁盘"""
-    config_path = _get_config_path()
-    try:
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(CONFIG, f, ensure_ascii=False, indent=4)
-        logger.debug(f"[{__plugin_name__}] 配置已保存")
-    except Exception as e:
-        logger.error(f"[{__plugin_name__}] 保存配置失败: {e}")
+    def _update_sorted_keys(self):
+        """更新排序后的语音关键词列表"""
+        self.sorted_keys = sorted(self.voice_map.keys())
 
-# ================= 语音库管理 =================
+    def _load_local_voices(self):
+        """加载本地 voices 目录的语音"""
+        count = 0
+        for file_path in self.voice_dir.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXT:
+                keyword = file_path.stem.strip()
+                if keyword:
+                    self.voice_map[keyword] = str(file_path)
+                    count += 1
+        
+        if count > 0:
+            logger.info(f"[AiriVoice] 从本地加载 {count} 个语音")
 
-def refresh_voice_map():
-    """扫描文件系统，重建语音映射表"""
-    global VOICE_MAP
-    VOICE_MAP = {}
-    
-    # 1. 扫描插件自带的 voices 目录
-    local_dir = PLUGIN_PATH / "voices"
-    if local_dir.exists():
-        for file in local_dir.iterdir():
-            if file.is_file() and file.suffix.lower() in ['.mp3', '.wav', '.ogg', '.silk', '.amr']:
-                VOICE_MAP[file.stem] = str(file)
-    
-    # 2. 扫描用户添加的 extra_voices 目录
-    if EXTRA_VOICE_DIR and EXTRA_VOICE_DIR.exists():
-        pool = CONFIG.get("extra_voice_pool", [])
-        for file in EXTRA_VOICE_DIR.iterdir():
-            if file.is_file() and file.suffix.lower() in ['.mp3', '.wav', '.ogg', '.silk', '.amr']:
-                key = file.stem
-                # 策略：如果池子为空，视为允许所有；否则只允许池子里的
-                if not pool or key in pool:
-                    VOICE_MAP[key] = str(file)
-    
-    logger.info(f"[{__plugin_name__}] 语音库已刷新，共 {len(VOICE_MAP)} 条语音")
+    def _load_web_voices(self, config: dict = None):
+        """加载网页配置的额外语音"""
+        if config is None:
+            return
+        
+        extra_pool = config.get("extra_voice_pool", [])
+        if not extra_pool:
+            return
+        
+        logger.debug(f"[AiriVoice] 网页相对路径池：{extra_pool}")
+        
+        loaded = 0
+        data_dir_resolved = self.data_dir.resolve()
+        
+        for rel_path in extra_pool:
+            if not isinstance(rel_path, str) or not rel_path.strip():
+                continue
+            
+            try:
+                abs_path = (self.data_dir / rel_path).resolve()
+                
+                if not abs_path.is_relative_to(data_dir_resolved):
+                    logger.warning(f"[AiriVoice] 检测到非法路径：{rel_path}")
+                    continue
+            except (ValueError, OSError) as e:
+                logger.warning(f"[AiriVoice] 路径解析失败：{rel_path} - {e}")
+                continue
+            
+            if abs_path.exists() and abs_path.is_file():
+                if abs_path.suffix.lower() not in ALLOWED_EXT:
+                    logger.warning(f"[AiriVoice] 忽略非音频文件：{abs_path}")
+                    continue
+                
+                keyword = abs_path.stem.strip()
+                if keyword:
+                    self.voice_map[keyword] = str(abs_path)
+                    loaded += 1
+                    logger.debug(f"[AiriVoice] 网页加载：'{keyword}' → {abs_path}")
+            else:
+                logger.warning(f"[AiriVoice] 文件不存在：{abs_path} (相对：{rel_path})")
+        
+        if loaded > 0:
+            logger.info(f"[AiriVoice] 从网页配置加载 {loaded} 个额外语音")
 
-# ================= 工具函数 =================
-
-async def download_file(url: str, save_path: Path) -> bool:
-    """异步下载文件"""
-    try:
-        # 设置 User-Agent 防止部分网站拦截
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, timeout=30) as resp:
-                if resp.status == 200:
-                    # 确保目录存在
-                    save_path.parent.mkdir(parents=True, exist_ok=True)
-                    with open(save_path, 'wb') as f:
-                        # 分块写入以防大文件内存溢出
-                        async for chunk in resp.content.iter_chunked(1024):
-                            f.write(chunk)
+    def _check_admin(self, event: AstrMessageEvent) -> bool:
+        """检查用户是否有管理员权限"""
+        if self.admin_mode == "all":
+            return True
+        
+        if self.admin_mode == "admin":
+            if getattr(event, 'is_admin', False) or getattr(event, 'is_master', False):
+                return True
+            try:
+                role = event.get_platform_user_role()
+                if role in ('admin', 'owner', 'master'):
                     return True
-                else:
-                    logger.error(f"[{__plugin_name__}] 下载失败，状态码: {resp.status}")
-                    return False
-    except Exception as e:
-        logger.error(f"[{__plugin_name__}] 下载异常: {e}")
+            except AttributeError:
+                pass
+            return False
+        
+        if self.admin_mode == "whitelist":
+            user_id = self._get_user_id(event)
+            if user_id and user_id in self.admin_whitelist:
+                return True
+            
+            uname = getattr(event, 'sender_name', None) or getattr(event, 'nickname', None)
+            if uname and uname in self.admin_whitelist:
+                return True
+            
+            return False
+        
         return False
 
-def check_permission(event: AstrMessageEvent) -> bool:
-    """检查用户是否有管理权限"""
-    mode = CONFIG.get("admin_mode", "whitelist")
-    
-    sender_id = event.get_sender_id()
-    nickname = event.get_sender_name()
-    
-    # 获取管理员列表 (兼容不同版本的 AstrBot)
-    admin_ids = []
-    try:
-        # 尝试从 context 获取 (如果 event 有 context 属性)
-        if hasattr(event, 'context') and hasattr(event.context, 'get_admin_ids'):
-            admin_ids = event.context.get_admin_ids()
-        # 某些版本直接在 event 上
-        elif hasattr(event, 'get_admin_ids'):
-            admin_ids = event.get_admin_ids()
-    except Exception:
-        pass
-    
-    # 模式判断
-    if mode == "all":
-        return True
-    if mode == "admin":
-        return sender_id in admin_ids
-    
-    # whitelist 模式
-    allow_list = CONFIG.get("admin_whitelist", [])
-    return (sender_id in allow_list) or (nickname in allow_list) or (sender_id in admin_ids)
-
-def sanitize_filename(name: str) -> str:
-    """清理文件名，只保留安全字符"""
-    # 只保留字母、数字、中文、下划线、中划线
-    safe_name = re.sub(r'[^\w\u4e00-\u9fa5_-]', '', name)
-    return safe_name if safe_name else "unnamed"
-
-# ================= 核心逻辑 =================
-
-async def handle_message(event: AstrMessageEvent):
-    """消息统一入口"""
-    message_chain = event.get_message_chain()
-    text = message_chain.text().strip()
-    
-    if not text:
-        return
-
-    # --- 1. 命令处理 ---
-    if text.startswith("/"):
-        parts = text.split(maxsplit=1)
-        cmd = parts[0]
-        args = parts[1] if len(parts) > 1 else ""
-        args_list = args.split() if args else []
-
-        # === /voice.add ===
-        if cmd == "/voice.add":
-            if not check_permission(event):
-                await event.send("❌ 权限不足：仅限管理员或白名单用户添加语音。")
-                return
-            
-            ref_msg = event.get_message_ref()
-            if not ref_msg:
-                await event.send("❌ 用法错误：请**引用**一条语音消息，然后发送 `/voice.add 关键词`")
-                return
-            
-            if not args_list:
-                await event.send("❌ 请指定关键词，例如：`/voice.add 早上好`")
-                return
-            
-            keyword = args_list[0]
-            safe_name = sanitize_filename(keyword)
-            
-            if not safe_name:
-                await event.send("❌ 关键词无效，请使用中文、字母或数字。")
-                return
-
-            # 解析引用消息中的文件
-            file_url = None
-            file_ext = "mp3"
-            ref_chain = ref_msg.get_message_chain()
-            
-            for comp in ref_chain:
-                ctype = getattr(comp, 'type', '')
-                # 匹配语音、文件、录音类型
-                if ctype in ['voice', 'record', 'file'] and hasattr(comp, 'url') and comp.url:
-                    file_url = comp.url
-                    # 尝试获取扩展名
-                    if hasattr(comp, 'name') and comp.name and '.' in comp.name:
-                        file_ext = comp.name.split('.')[-1]
-                    elif '.' in file_url:
-                        # 去除 URL 参数
-                        clean_url = file_url.split('?')[0]
-                        file_ext = clean_url.split('.')[-1]
-                    break
-            
-            if not file_url:
-                await event.send("❌ 未能在引用的消息中找到语音文件。")
-                return
-
-            # 构建保存路径
-            filename = f"{safe_name}.{file_ext}"
-            save_path = EXTRA_VOICE_DIR / filename
-            
-            logger.info(f"[{__plugin_name__}] 正在下载语音: {filename}")
-            
-            if await download_file(file_url, save_path):
-                # ✅ 关键步骤：更新配置并持久化
-                pool = CONFIG.get("extra_voice_pool", [])
-                if safe_name not in pool:
-                    pool.append(safe_name)
-                    CONFIG["extra_voice_pool"] = pool
-                    save_config()  # <--- 写入磁盘
-                
-                refresh_voice_map() # 刷新内存
-                await event.send(f"✅ 语音 `{safe_name}` 添加成功！\n已永久保存至配置文件，重启后有效。")
-            else:
-                await event.send("❌ 语音文件下载失败，请检查链接或网络。")
+    @filter.regex(r"^\s*.+\s*$")
+    async def voice_handler(self, event: AstrMessageEvent):
+        """语音触发处理器"""
+        text = (event.message_str or "").strip()
+        if not text:
             return
 
-        # === /voice.delete ===
-        if cmd == "/voice.delete":
-            if not check_permission(event):
-                await event.send("❌ 权限不足。")
+        # 自动检测配置变化（网页上传后自动刷新）
+        current_pool_len = len(self.config.get("extra_voice_pool", []))
+        if current_pool_len > self.last_pool_len:
+            logger.info("[AiriVoice] 检测到网页配置变化，自动刷新语音列表")
+            self._load_web_voices(self.config)
+            self._update_sorted_keys()
+            self.last_pool_len = current_pool_len
+
+        # 获取关键词
+        keyword = text
+        if self.trigger_mode == "prefix":
+            match = re.search(r"^#voice\s+(.+)", text, re.I)
+            if not match:
                 return
-            if not args_list:
-                await event.send("❌ 用法：`/voice.delete 关键词`")
-                return
-            
-            name = args_list[0]
-            target_file = None
-            
-            # 只在 extra_voices 中查找
-            if EXTRA_VOICE_DIR.exists():
-                for f in EXTRA_VOICE_DIR.iterdir():
-                    if f.stem == name:
-                        target_file = f
-                        break
-            
-            if target_file:
-                try:
-                    target_file.unlink() # 删除文件
-                    
-                    # 从配置池中移除
-                    pool = CONFIG.get("extra_voice_pool", [])
-                    if name in pool:
-                        pool.remove(name)
-                        CONFIG["extra_voice_pool"] = pool
-                        save_config()
-                    
-                    refresh_voice_map()
-                    await event.send(f"🗑️ 语音 `{name}` 已删除。")
-                except Exception as e:
-                    await event.send(f"❌ 删除文件失败: {e}")
-            else:
-                await event.send(f"❌ 未找到名为 `{name}` 的用户自定义语音。")
-            return
+            keyword = match.group(1).strip()
 
-        # === /voice.list ===
-        if cmd == "/voice.list":
-            page = 1
-            if args_list and args_list[0].isdigit():
-                page = int(args_list[0])
-            
-            keys = sorted(VOICE_MAP.keys())
-            total = len(keys)
-            per_page = 20
-            total_pages = max(1, (total + per_page - 1) // per_page)
-            
-            if page < 1: page = 1
-            if page > total_pages: page = total_pages
-            
-            start_idx = (page - 1) * per_page
-            end_idx = start_idx + per_page
-            current_keys = keys[start_idx:end_idx]
-            
-            msg = f"📄 **语音列表** (第 {page}/{total_pages} 页，共 {total} 条)\n\n"
-            if not current_keys:
-                msg += "(暂无语音)"
-            else:
-                for k in current_keys:
-                    # 标记是自带还是用户添加
-                    source = "🔒" if k not in CONFIG.get("extra_voice_pool", []) and EXTRA_VOICE_DIR and (EXTRA_VOICE_DIR / f"{k}.mp3").exists() else "🔓"
-                    # 简单标记：如果在 extra_voices 目录且不在 pool (理论上不会发生)，或者是 pool 里的
-                    is_user = k in CONFIG.get("extra_voice_pool", [])
-                    tag = "🟢" if is_user else "🔵"
-                    msg += f"{tag} `{k}`\n"
-            
-            if total_pages > 1:
-                msg += f"\n💡 提示：使用 `/voice.list {page+1}` 查看下一页"
-            
-            await event.send(msg)
-            return
-
-        # === /voice.reload ===
-        if cmd == "/voice.reload":
-            if not check_permission(event):
-                await event.send("❌ 权限不足。")
-                return
-            refresh_voice_map()
-            await event.send("🔄 语音库已重新加载。")
-            return
-
-        # === /voice.help ===
-        if cmd == "/voice.help":
-            help_text = (
-                f"🌸 **{__plugin_name__} 帮助文档**\n\n"
-                f"🔹 **触发方式**: {CONFIG.get('trigger_mode', 'direct')}\n"
-                f"   - `direct`: 直接发送关键词 (如 `早安`)\n"
-                f"   - `prefix`: 发送 `#voice 关键词`\n\n"
-                f"🔹 **管理命令** (需权限):\n"
-                f"   - `/voice.add 关键词`: 引用语音消息添加\n"
-                f"   - `/voice.delete 关键词`: 删除用户语音\n"
-                f"   - `/voice.list [页码]`: 查看列表\n"
-                f"   - `/voice.reload`: 重载语音库\n"
-                f"   - `/voice.check`: 检查当前权限"
-            )
-            await event.send(help_text)
-            return
-            
-        # === /voice.check ===
-        if cmd == "/voice.check":
-            is_ok = check_permission(event)
-            status = "✅ 拥有权限" if is_ok else "❌ 无权限"
-            await event.send(f"当前用户权限状态：{status}\n模式：{CONFIG.get('admin_mode')}")
-            return
-
-    # --- 2. 语音触发逻辑 ---
-    trigger_mode = CONFIG.get("trigger_mode", "direct")
-    keyword = text
-    
-    # 前缀模式处理
-    if trigger_mode == "prefix":
-        if keyword.startswith("#voice "):
-            keyword = keyword[7:].strip()
-        else:
-            return  # 非前缀且不匹配，直接忽略
-    
-    # 匹配并发送
-    if keyword in VOICE_MAP:
-        file_path = VOICE_MAP[keyword]
-        if os.path.exists(file_path):
+        # 发送语音
+        matched_path = self.voice_map.get(keyword)
+        if matched_path:
             try:
-                # 发送文件 (语音)
-                await event.send_file(file_path)
+                yield event.chain_result([Record.fromFileSystem(matched_path)])
+                logger.debug(f"[AiriVoice] 发送语音：'{keyword}'")
+            except FileNotFoundError as e:
+                logger.error(f"[AiriVoice] 文件不存在 '{keyword}': {e}")
+                yield event.plain_result(f"语音文件不存在")
             except Exception as e:
-                logger.error(f"[{__plugin_name__}] 发送语音失败: {e}")
-                await event.send(f"⚠️ 语音文件存在，但发送失败：{str(e)}")
-        else:
-            # 文件丢失，从内存移除
-            logger.warning(f"[{__plugin_name__}] 语音文件丢失: {file_path}")
-            del VOICE_MAP[keyword]
-            # 如果是在池子里的，也建议从池子移除并保存，防止下次报错
-            if keyword in CONFIG.get("extra_voice_pool", []):
-                CONFIG["extra_voice_pool"].remove(keyword)
-                save_config()
+                logger.error(f"[AiriVoice] 发送失败 '{keyword}': {e}")
+                yield event.plain_result(f"语音发送失败：{type(e).__name__}")
 
-# ================= 插件入口 =================
+    @filter.command("voice.add")
+    async def voice_add(self, event: AstrMessageEvent, name: str):
+        """
+        通过引用语音消息添加新语音
+        用法：引用一条语音消息，然后发送 /voice.add 名字
+        """
+        # 权限检查
+        if not self._check_admin(event):
+            yield event.plain_result("? 权限不足：此命令仅限管理员使用")
+            return
 
-def init_plugin(context):
-    """
-    AstrBot v4+ 标准插件入口函数
-    框架会自动调用此函数来初始化插件
-    """
-    global PLUGIN_PATH, DATA_DIR, EXTRA_VOICE_DIR
-    
-    PLUGIN_PATH = Path(__file__).parent
-    logger.info(f"[{__plugin_name__}] 正在初始化...")
-    
-    # 1. 确定数据目录
-    # 优先使用框架提供的数据目录， fallback 到插件目录下的 data 文件夹
-    try:
-        DATA_DIR = context.get_data_dir()
-        EXTRA_VOICE_DIR = DATA_DIR / "extra_voices"
-    except AttributeError:
-        # 兼容旧版或特定环境
-        DATA_DIR = PLUGIN_PATH / "data"
-        EXTRA_VOICE_DIR = DATA_DIR / "extra_voices"
-        logger.warning(f"[{__plugin_name__}] 无法获取框架数据目录，使用插件本地目录: {DATA_DIR}")
-    
-    # 确保目录存在
-    EXTRA_VOICE_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # 2. 加载配置
-    load_config()
-    
-    # 3. 构建语音库
-    refresh_voice_map()
-    
-    # 4. 注册消息监听器
-    # 这是 v4+ 的核心：将 handle_message 函数注册为全局消息处理器
-    context.register_event_listener(handle_message)
-    
-    logger.info(f"[{__plugin_name__}] 初始化完成。当前语音数：{len(VOICE_MAP)}")
+        # 检查是否有引用消息
+        if not self._get_reply_id(event):
+            yield event.plain_result("? 请引用一条语音消息后再使用此命令")
+            return
+
+        # 检查名字是否合法
+        if not name or name.strip() == "":
+            yield event.plain_result("? 请提供语音名称，例如：/voice.add 打卡啦摩托")
+            return
+
+        name = name.strip()
+
+        # 检查是否已存在
+        if name in self.voice_map:
+            yield event.plain_result(f"?? 语音「{name}」已存在，如需覆盖请先删除旧语音")
+            return
+
+        # 获取音频 URL
+        audio_url = await self._get_audio_url(event)
+        if not audio_url:
+            yield event.plain_result("? 未能从引用的消息中提取到音频，请确保引用的是语音消息")
+            return
+
+        logger.debug(f"[AiriVoice] 获取到音频 URL: {audio_url}")
+
+        # 下载音频
+        audio_data = await self._download_audio(audio_url)
+        if not audio_data:
+            yield event.plain_result("? 音频下载失败，请稍后重试")
+            return
+
+        # 确保目录存在
+        self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
+
+        # 确定文件扩展名
+        ext = self._get_file_ext_from_url(audio_url)
+
+        # 保存文件
+        file_path = self.extra_voice_dir / f"{name}{ext}"
+        try:
+            with open(file_path, "wb") as f:
+                f.write(audio_data)
+            
+            # 添加到语音映射
+            self.voice_map[name] = str(file_path)
+            self._update_sorted_keys()
+            
+            # 更新网页配置池（可选，让配置持久化）
+            if "extra_voice_pool" not in self.config:
+                self.config["extra_voice_pool"] = []
+            rel_path = f"extra_voices/{name}{ext}"
+            if rel_path not in self.config["extra_voice_pool"]:
+                self.config["extra_voice_pool"].append(rel_path)
+            
+            yield event.plain_result(f"? 语音「{name}」添加成功！\n? 文件：{name}{ext}\n? 大小：{len(audio_data) / 1024:.2f} KB")
+        except Exception as e:
+            logger.error(f"[AiriVoice] 保存语音失败：{e}")
+            yield event.plain_result(f"? 保存语音失败：{str(e)}")
+
+    @filter.command("voice.delete")
+    async def voice_delete(self, event: AstrMessageEvent, name: str):
+        """删除语音"""
+        if not self._check_admin(event):
+            yield event.plain_result("? 权限不足：此命令仅限管理员使用")
+            return
+
+        if name not in self.voice_map:
+            yield event.plain_result(f"? 语音「{name}」不存在")
+            return
+
+        file_path = Path(self.voice_map[name])
+        
+        # 只允许删除 extra_voices 目录下的文件（保护本地 voices 目录）
+        if not str(file_path.resolve()).startswith(str(self.extra_voice_dir.resolve())):
+            yield event.plain_result(f"?? 只能删除通过 /voice.add 添加的语音，本地 voices/ 目录的文件请手动删除")
+            return
+
+        try:
+            file_path.unlink()
+            del self.voice_map[name]
+            self._update_sorted_keys()
+            
+            # 从配置池中移除
+            rel_path = f"extra_voices/{name}{file_path.suffix}"
+            if "extra_voice_pool" in self.config and rel_path in self.config["extra_voice_pool"]:
+                self.config["extra_voice_pool"].remove(rel_path)
+            
+            yield event.plain_result(f"? 语音「{name}」已删除")
+        except Exception as e:
+            logger.error(f"[AiriVoice] 删除语音失败：{e}")
+            yield event.plain_result(f"? 删除失败：{str(e)}")
+
+    @filter.command("voice.list")
+    async def list_voices(self, event: AstrMessageEvent):
+        """列出所有语音关键词"""
+        if not self.sorted_keys:
+            yield event.plain_result("当前没有可用语音～\n将语音文件放入 voices/ 目录或通过网页上传")
+            return
+
+        args = (event.message_str or "").strip().split()
+        page = max(1, int(args[1])) if len(args) > 1 and args[1].isdigit() else 1
+        
+        total = len(self.sorted_keys)
+        total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+        
+        if page > total_pages:
+            yield event.plain_result(f"页码过大～总共 {total_pages} 页")
+            return
+
+        start = (page - 1) * PAGE_SIZE
+        page_keys = self.sorted_keys[start:start + PAGE_SIZE]
+
+        msg = f"? 可用语音（第 {page}/{total_pages} 页，共 {total} 个）：\n\n"
+        msg += "\n".join(f"? {k}" for k in page_keys)
+
+        if total_pages > 1:
+            nav = []
+            if page > 1:
+                nav.append(f"/voice.list {page-1} ← 上一页")
+            if page < total_pages:
+                nav.append(f"/voice.list {page+1} → 下一页")
+            msg += "\n\n" + "  |  ".join(nav)
+
+        yield event.plain_result(msg)
+
+    @filter.command("voice.reload")
+    async def reload_voices(self, event: AstrMessageEvent):
+        """重新加载语音列表（需要管理员权限）"""
+        if not self._check_admin(event):
+            yield event.plain_result("? 权限不足：此命令仅限管理员使用")
+            return
+        
+        self._load_local_voices()
+        self._load_web_voices(self.config)
+        self._update_sorted_keys()
+        self.last_pool_len = len(self.config.get("extra_voice_pool", []))
+        
+        yield event.plain_result(f"? 已重新加载，共 {len(self.voice_map)} 个语音")
+
+    @filter.command("voice.help")
+    async def help(self, event: AstrMessageEvent):
+        """显示帮助信息"""
+        is_admin = self._check_admin(event)
+        
+        commands = [
+            "? /voice.list [页码] - 查看可用语音",
+            "? /voice.help - 显示此帮助",
+        ]
+        if is_admin:
+            commands.append("? /voice.add 名字 - 引用语音消息添加新语音 (管理员)")
+            commands.append("?? /voice.delete 名字 - 删除语音 (管理员)")
+            commands.append("? /voice.reload - 重新加载语音列表 (管理员)")
+        
+        help_msg = f"""? AiriVoice 语音插件
+
+【使用方法】
+1. 将语音文件放入 voices/ 目录
+2. 或在 AstrBot 网页后台 → 插件配置 → 上传语音
+3. 或引用语音消息发送 /voice.add 名字
+4. 文件名即为关键词（不含扩展名）
+5. 直接输入关键词即可发送语音
+
+【触发模式】
+? direct: 直接输入关键词触发
+? prefix: 使用 #voice 关键词 触发
+
+【命令】
+{chr(10).join(commands)}"""
+        
+        yield event.plain_result(help_msg)
+
+    @filter.command("voice.check")
+    async def check_permission(self, event: AstrMessageEvent):
+        """检查当前用户权限（调试用）"""
+        is_admin = self._check_admin(event)
+        user_id = self._get_user_id(event) or "未知"
+        
+        msg = f"? 权限检查\n\n"
+        msg += f"用户 ID: {user_id}\n"
+        msg += f"权限模式：{self.admin_mode}\n"
+        msg += f"是否有权限：{'? 是' if is_admin else '? 否'}\n"
+        
+        if self.admin_mode == "whitelist" and not is_admin:
+            msg += f"\n? 提示：在 AstrBot 网页后台 → 插件配置 → admin_whitelist 中添加您的用户 ID"
+        
+        yield event.plain_result(msg)
