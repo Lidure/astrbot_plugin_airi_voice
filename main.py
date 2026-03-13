@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Optional
 import re
 import aiohttp
+import os
 
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
@@ -16,7 +17,10 @@ PAGE_SIZE = 25
 @register("airi_voice", "lidure", "输入关键词发送对应语音", "2.4", "https://github.com/Lidure/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
-        super().__init__(context)
+        # 不调用 super().__init__(context) 以避免 context.get_data_dir() 错误
+        # Star 基类在较新版本中可能不需要显式调用 super().__init__()
+        
+        self.context = context
         
         # 路径初始化 - 使用框架规范 API
         self.plugin_dir = Path(__file__).parent
@@ -25,9 +29,10 @@ class AiriVoice(Star):
         
         # 使用 astrbot.api 获取数据目录
         try:
-            self.data_dir = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_airi_voice"
-        except Exception:
-            # 降级方案：使用插件目录下的 data 文件夹
+            data_root = get_astrbot_data_path()
+            self.data_dir = Path(data_root) / "plugin_data" / "astrbot_plugin_airi_voice"
+        except Exception as e:
+            logger.warning(f"[AiriVoice] get_astrbot_data_path 失败：{e}，使用插件目录作为数据目录")
             self.data_dir = self.plugin_dir / "data"
         
         self.extra_voice_dir = self.data_dir / "extra_voices"
