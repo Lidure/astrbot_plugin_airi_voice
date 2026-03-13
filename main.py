@@ -12,7 +12,7 @@ ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
 PAGE_SIZE = 15
 
 
-@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.0", "https://github.com/Lidure/astrbot_plugin_airi_voice")
+@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.1", "https://github.com/Lidure/astrbot_plugin_airi_voice")
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -341,72 +341,48 @@ class AiriVoice(Star):
             yield event.plain_result("❌ 音频下载失败，请稍后重试")
             return
 
-        # 确定扩展名
+        # 保存到持久化目录（user_added）
         ext = self._get_file_ext_from_url(audio_url)
-    
-        # 保存到网页上传目录
-        file_path = self.extra_voice_dir / f"{name}{ext}"
+        file_path = self.user_added_dir / f"{name}{ext}"
+
         try:
             with open(file_path, "wb") as f:
                 f.write(audio_data)
-    
-            # 相对路径（用于 config pool）
-            rel_path = f"extra_voices/{name}{ext}"
-    
-            # 追加到 config pool（让网页显示）
-            if "extra_voice_pool" not in self.config:
-                self.config["extra_voice_pool"] = []
-            if rel_path not in self.config["extra_voice_pool"]:
-                self.config["extra_voice_pool"].append(rel_path)
-    
-            # 立即加载到内存
+            
             self.voice_map[name] = str(file_path)
             self._update_sorted_keys()
-    
-            # 可选：保存 config（如果 AstrBot 支持手动 save）
-            # self.context.save_config()  # 如果有这个方法
-    
-            yield event.plain_result(f"✅ 已添加语音「{name}」！\n"
-                                   f"文件已保存到网页配置的额外语音池\n"
-                                   f"可在插件配置中查看/删除\n"
-                                   f"直接输入 {name} 即可触发")
+            
+            yield event.plain_result(f"✅ 语音「{name}」添加成功！\n📁 文件：{name}{ext}\n💾 大小：{len(audio_data) / 1024:.2f} KB")
         except Exception as e:
-            logger.error(f"[AiriVoice] 保存失败: {e}", exc_info=True)
-            yield event.plain_result(f"❌ 保存失败：{str(e)}")
+            logger.error(f"[AiriVoice] 保存语音失败：{e}")
+            yield event.plain_result(f"❌ 保存语音失败：{str(e)}")
 
     @filter.command("voice.delete")
     async def voice_delete(self, event: AstrMessageEvent, name: str):
         """删除语音"""
         if not self._check_admin(event):
-            yield event.plain_result("❌ 权限不足")
+            yield event.plain_result("❌ 权限不足：此命令仅限管理员使用")
             return
-    
+
         if name not in self.voice_map:
             yield event.plain_result(f"❌ 语音「{name}」不存在")
             return
-    
+
         file_path = Path(self.voice_map[name])
         
-        # 只允许删除 extra_voices 目录下的文件
-        if not str(file_path.resolve()).startswith(str(self.extra_voice_dir.resolve())):
-            yield event.plain_result("⚠️ 只能删除通过 /voice.add 或网页上传的语音")
+        # 只允许删除 user_added 目录下的文件
+        if not str(file_path.resolve()).startswith(str(self.user_added_dir.resolve())):
+            yield event.plain_result(f"⚠️ 只能删除通过 /voice.add 添加的语音，本地 voices/ 和网页上传的文件请手动管理")
             return
-    
+
         try:
             file_path.unlink()
             del self.voice_map[name]
             self._update_sorted_keys()
-    
-            # 从网页配置池中移除
-            ext = file_path.suffix
-            rel_path = f"extra_voices/{name}{ext}"
-            if "extra_voice_pool" in self.config and rel_path in self.config["extra_voice_pool"]:
-                self.config["extra_voice_pool"].remove(rel_path)
-                # 可选：self.context.save_config()
-    
-            yield event.plain_result(f"✅ 已删除语音「{name}」\n网页配置已同步更新")
+            
+            yield event.plain_result(f"✅ 语音「{name}」已删除")
         except Exception as e:
-            logger.error(f"[AiriVoice] 删除失败: {e}")
+            logger.error(f"[AiriVoice] 删除语音失败：{e}")
             yield event.plain_result(f"❌ 删除失败：{str(e)}")
 
     @filter.command("voice.list")
