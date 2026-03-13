@@ -9,7 +9,7 @@ import aiohttp
 
 
 ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
-PAGE_SIZE = 15
+PAGE_SIZE = 25
 
 
 @register("airi_voice", "lidure", "输入关键词发送对应语音", "2.0", "https://github.com/Lidure/astrbot_plugin_airi_voice")
@@ -324,6 +324,7 @@ class AiriVoice(Star):
 
         # 确定文件扩展名
         ext = self._get_file_ext_from_url(audio_url)
+
         # 保存文件
         file_path = self.extra_voice_dir / f"{name}{ext}"
         try:
@@ -334,44 +335,34 @@ class AiriVoice(Star):
             self.voice_map[name] = str(file_path)
             self._update_sorted_keys()
             
-            # 更新网页配置池
+            # 更新网页配置池（可选，让配置持久化）
             if "extra_voice_pool" not in self.config:
                 self.config["extra_voice_pool"] = []
-            
             rel_path = f"extra_voices/{name}{ext}"
             if rel_path not in self.config["extra_voice_pool"]:
                 self.config["extra_voice_pool"].append(rel_path)
-                
-                # 🔥 关键修改：保存配置到硬盘
-                # AstrBot 4.x 通常通过 context 获取 config_manager
-                try:
-                    await self.context.config_manager.save_config()
-                    logger.info(f"[AiriVoice] 配置已保存：{rel_path}")
-                except Exception as save_err:
-                    logger.error(f"[AiriVoice] 保存配置失败：{save_err}")
-                    # 如果保存失败，最好提示用户，但文件已经下载成功了
             
-            yield event.plain_result(f"✅ 语音「{name}」添加成功！\n📁 文件：{name}{ext}\n💾 大小：{len(audio_data) / 1024:.2f} KB\n💡 配置已自动保存")
+            yield event.plain_result(f"? 语音「{name}」添加成功！\n? 文件：{name}{ext}\n? 大小：{len(audio_data) / 1024:.2f} KB")
         except Exception as e:
             logger.error(f"[AiriVoice] 保存语音失败：{e}")
-            yield event.plain_result(f"❌ 保存语音失败：{str(e)}")
+            yield event.plain_result(f"? 保存语音失败：{str(e)}")
 
     @filter.command("voice.delete")
     async def voice_delete(self, event: AstrMessageEvent, name: str):
         """删除语音"""
         if not self._check_admin(event):
-            yield event.plain_result("❌ 权限不足：此命令仅限管理员使用")
+            yield event.plain_result("? 权限不足：此命令仅限管理员使用")
             return
 
         if name not in self.voice_map:
-            yield event.plain_result(f"❌ 语音「{name}」不存在")
+            yield event.plain_result(f"? 语音「{name}」不存在")
             return
 
         file_path = Path(self.voice_map[name])
         
         # 只允许删除 extra_voices 目录下的文件（保护本地 voices 目录）
         if not str(file_path.resolve()).startswith(str(self.extra_voice_dir.resolve())):
-            yield event.plain_result(f"⚠️ 只能删除通过 /voice.add 添加的语音，本地 voices/ 目录的文件请手动删除")
+            yield event.plain_result(f"?? 只能删除通过 /voice.add 添加的语音，本地 voices/ 目录的文件请手动删除")
             return
 
         try:
@@ -383,19 +374,12 @@ class AiriVoice(Star):
             rel_path = f"extra_voices/{name}{file_path.suffix}"
             if "extra_voice_pool" in self.config and rel_path in self.config["extra_voice_pool"]:
                 self.config["extra_voice_pool"].remove(rel_path)
-                
-                # 🔥 关键修改：保存配置到硬盘
-                try:
-                    await self.context.config_manager.save_config()
-                    logger.info(f"[AiriVoice] 配置已更新，移除：{rel_path}")
-                except Exception as save_err:
-                    logger.error(f"[AiriVoice] 保存配置失败：{save_err}")
             
-            yield event.plain_result(f"✅ 语音「{name}」已删除\n💡 配置已自动保存")
+            yield event.plain_result(f"? 语音「{name}」已删除")
         except Exception as e:
             logger.error(f"[AiriVoice] 删除语音失败：{e}")
-            yield event.plain_result(f"❌ 删除失败：{str(e)}")
-            
+            yield event.plain_result(f"? 删除失败：{str(e)}")
+
     @filter.command("voice.list")
     async def list_voices(self, event: AstrMessageEvent):
         """列出所有语音关键词"""
@@ -416,8 +400,8 @@ class AiriVoice(Star):
         start = (page - 1) * PAGE_SIZE
         page_keys = self.sorted_keys[start:start + PAGE_SIZE]
 
-        msg = f"📋 可用语音（第 {page}/{total_pages} 页，共 {total} 个）：\n\n"
-        msg += "\n".join(f"• {k}" for k in page_keys)
+        msg = f"? 可用语音（第 {page}/{total_pages} 页，共 {total} 个）：\n\n"
+        msg += "\n".join(f"? {k}" for k in page_keys)
 
         if total_pages > 1:
             nav = []
@@ -433,7 +417,7 @@ class AiriVoice(Star):
     async def reload_voices(self, event: AstrMessageEvent):
         """重新加载语音列表（需要管理员权限）"""
         if not self._check_admin(event):
-            yield event.plain_result("❌ 权限不足：此命令仅限管理员使用")
+            yield event.plain_result("? 权限不足：此命令仅限管理员使用")
             return
         
         self._load_local_voices()
@@ -441,7 +425,7 @@ class AiriVoice(Star):
         self._update_sorted_keys()
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
         
-        yield event.plain_result(f"✅ 已重新加载，共 {len(self.voice_map)} 个语音")
+        yield event.plain_result(f"? 已重新加载，共 {len(self.voice_map)} 个语音")
 
     @filter.command("voice.help")
     async def help(self, event: AstrMessageEvent):
@@ -449,15 +433,15 @@ class AiriVoice(Star):
         is_admin = self._check_admin(event)
         
         commands = [
-            "📋 /voice.list [页码] - 查看可用语音",
-            "❓ /voice.help - 显示此帮助",
+            "? /voice.list [页码] - 查看可用语音",
+            "? /voice.help - 显示此帮助",
         ]
         if is_admin:
-            commands.append("➕ /voice.add 名字 - 引用语音消息添加新语音 (管理员)")
-            commands.append("🗑️ /voice.delete 名字 - 删除语音 (管理员)")
-            commands.append("🔄 /voice.reload - 重新加载语音列表 (管理员)")
+            commands.append("? /voice.add 名字 - 引用语音消息添加新语音 (管理员)")
+            commands.append("?? /voice.delete 名字 - 删除语音 (管理员)")
+            commands.append("? /voice.reload - 重新加载语音列表 (管理员)")
         
-        help_msg = f"""🌸 AiriVoice 语音插件
+        help_msg = f"""? AiriVoice 语音插件
 
 【使用方法】
 1. 将语音文件放入 voices/ 目录
@@ -467,8 +451,8 @@ class AiriVoice(Star):
 5. 直接输入关键词即可发送语音
 
 【触发模式】
-🔹 direct: 直接输入关键词触发
-🔹 prefix: 使用 #voice 关键词 触发
+? direct: 直接输入关键词触发
+? prefix: 使用 #voice 关键词 触发
 
 【命令】
 {chr(10).join(commands)}"""
@@ -481,12 +465,12 @@ class AiriVoice(Star):
         is_admin = self._check_admin(event)
         user_id = self._get_user_id(event) or "未知"
         
-        msg = f"🔐 权限检查\n\n"
+        msg = f"? 权限检查\n\n"
         msg += f"用户 ID: {user_id}\n"
         msg += f"权限模式：{self.admin_mode}\n"
-        msg += f"是否有权限：{'✅ 是' if is_admin else '❌ 否'}\n"
+        msg += f"是否有权限：{'? 是' if is_admin else '? 否'}\n"
         
         if self.admin_mode == "whitelist" and not is_admin:
-            msg += f"\n💡 提示：在 AstrBot 网页后台 → 插件配置 → admin_whitelist 中添加您的用户 ID"
+            msg += f"\n? 提示：在 AstrBot 网页后台 → 插件配置 → admin_whitelist 中添加您的用户 ID"
         
         yield event.plain_result(msg)
