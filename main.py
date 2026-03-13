@@ -38,7 +38,11 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
     ) -> ToolExecResult:
-        if not self.plugin or not self.plugin.voice_map:
+        # 仅在插件触发模式为 llm 时生效，其他模式下工具只返回给 LLM 的提示文本
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+
+        if not self.plugin.voice_map:
             return "当前没有可用语音。"
 
         names = sorted(self.plugin.voice_map.keys())
@@ -70,7 +74,10 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
     ) -> ToolExecResult:
-        if not self.plugin or not self.plugin.voice_map:
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+
+        if not self.plugin.voice_map:
             return "当前没有可用语音。"
 
         keyword = (kwargs.get("keyword") or "").strip()
@@ -118,7 +125,10 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
     ) -> ToolExecResult:
-        if not self.plugin or not self.plugin.voice_map:
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+
+        if not self.plugin.voice_map:
             return "当前没有可用语音。"
 
         name = (kwargs.get("name") or "").strip()
