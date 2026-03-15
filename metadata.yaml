@@ -1,6 +1,6 @@
 name: astrbot_plugin_airi_voice # 插件唯一识别名，以 astrbot_plugin_ 前缀开头
 display_name: Airi_voice # 用于展示的名字，可以是方便人类阅读的名字（需要版本 >= v4.5.0，低版本不会报错，请放心填写）
-desc: 识别关键词后bot回复语音。可以存储QQ的语音消息并可通过命令发送。同时提供插件内的airi的语音，额外语音可以通过配置项或命令自己添加。 # 插件简短描述
-version: v2.1 # 插件版本号。格式：v1.1.1 或者 v1.1
+desc: 识别关键词后bot回复语音。可以存储QQ的语音消息并可通过命令发送。同时提供插件内的airi的语音，额外语音可以通过配置项或命令自己添加。支持可选 LLM 触发模式，由大模型自动选择并发送语音。 # 插件简短描述
+version: v2.2 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: Lidure # 作者
 repo: https://github.com/Lidure/astrbot_plugin_airi_voice # 插件的仓库地址

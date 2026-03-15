@@ -1,18 +1,178 @@
-from astrbot.api.star import Star, Context, register, StarTools
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api import logger
-from astrbot.api.message_components import Record, Reply
 from pathlib import Path
-from typing import Dict, List, Set, Optional
+from typing import Any, Dict, List, Optional, Set
 import re
+import random
+
 import aiohttp
+from pydantic import Field
+from pydantic.dataclasses import dataclass
+
+from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent, filter, MessageChain
+from astrbot.api.message_components import Record, Reply
+from astrbot.api.star import Context, Star, StarTools, register
+from astrbot.core.agent.run_context import ContextWrapper
+from astrbot.core.agent.tool import FunctionTool, ToolExecResult
+from astrbot.core.astr_agent_context import AstrAgentContext
 
 
-ALLOWED_EXT = {'.mp3', '.wav', '.ogg', '.silk', '.amr'}
+ALLOWED_EXT = {".mp3", ".wav", ".ogg", ".silk", ".amr"}
 PAGE_SIZE = 15
 
 
-@register("airi_voice", "lidure", "输入关键词发送对应语音", "2.1", "https://github.com/Lidure/astrbot_plugin_airi_voice")
+@dataclass
+class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
+    """列出当前插件中所有可用的语音名称。"""
+
+    name: str = "airi_list_all_voices"
+    description: str = "列出本插件加载的全部语音名称，供 LLM 选择使用。"
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        }
+    )
+    plugin: Any = None
+
+    async def call(
+        self, context: ContextWrapper[AstrAgentContext], **kwargs
+    ) -> ToolExecResult:
+        # 仅在插件触发模式为 llm 时生效，其他模式下工具只返回给 LLM 的提示文本
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+
+        if not self.plugin.voice_map:
+            return "当前没有可用语音。"
+
+        names = sorted(self.plugin.voice_map.keys())
+        return "当前可用语音名称列表：\n" + "\n".join(names)
+
+
+@dataclass
+class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
+    """根据关键词筛选语音名称。"""
+
+    name: str = "airi_search_voices"
+    description: str = (
+        "根据用户给出的关键词，在本插件的语音库中筛选匹配的语音名称。"
+    )
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "用户给出的语音关键词，用于模糊匹配语音名称。",
+                }
+            },
+            "required": ["keyword"],
+        }
+    )
+    plugin: Any = None
+
+    async def call(
+        self, context: ContextWrapper[AstrAgentContext], **kwargs
+    ) -> ToolExecResult:
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+
+        if not self.plugin.voice_map:
+            return "当前没有可用语音。"
+
+        keyword = (kwargs.get("keyword") or "").strip()
+        if not keyword:
+            return "请提供要搜索的语音关键词。"
+
+        keyword_lower = keyword.lower()
+        matched = [
+            name
+            for name in self.plugin.voice_map.keys()
+            if keyword_lower in name.lower()
+        ]
+
+        if not matched:
+            return f"未找到包含「{keyword}」的语音名称。"
+
+        matched.sort()
+        return (
+            f"根据关键词「{keyword}」筛选到的语音名称：\n" + "\n".join(matched)
+        )
+
+
+@dataclass
+class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
+    """根据指定名称直接向当前会话发送语音。"""
+
+    name: str = "airi_send_voice"
+    description: str = (
+        "根据指定的语音名称，直接向当前会话发送对应的语音消息。"
+    )
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "要发送的语音名称，必须是已存在的语音列表中的一个。",
+                }
+            },
+            "required": ["name"],
+        }
+    )
+    plugin: Any = None
+
+    async def call(
+        self, context: ContextWrapper[AstrAgentContext], **kwargs
+    ) -> ToolExecResult:
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+
+        if not self.plugin.voice_map:
+            return "当前没有可用语音。"
+
+        name = (kwargs.get("name") or "").strip()
+        if not name:
+            return "请提供要发送的语音名称。"
+
+        path = self.plugin.voice_map.get(name)
+        if not path:
+            return f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"
+
+        # 在 Tool 内部直接发送语音消息（对用户来说仍然是一次回复中的语音）
+        try:
+            agent_ctx = context.context.context
+            event = context.context.event
+        except Exception:
+            agent_ctx = None
+            event = None
+
+        if agent_ctx is None or event is None:
+            return f"无法获取当前会话上下文，未能发送语音「{name}」。"
+
+        try:
+            await agent_ctx.send_message(
+                event.unified_msg_origin,
+                MessageChain([Record.fromFileSystem(path)]),
+            )
+            logger.debug(f"[AiriVoice] LLM 工具发送语音：'{name}' → {path}")
+            # 不再给用户增加额外文字，只让 LLM 负责一句话内容
+            return ""
+        except FileNotFoundError as e:
+            logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
+            return f"语音文件不存在：{name}"
+        except Exception as e:
+            logger.error(f"[AiriVoice] LLM 工具发送失败 '{name}': {e}")
+            return f"语音发送失败：{type(e).__name__}"
+
+
+@register(
+    "airi_voice",
+    "lidure",
+    "输入关键词发送对应语音",
+    "2.2",
+    "https://github.com/Lidure/astrbot_plugin_airi_voice",
+)
 class AiriVoice(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
@@ -38,7 +198,7 @@ class AiriVoice(Star):
         # 配置
         self.config = config or {}
         self.trigger_mode = self.config.get("trigger_mode", "direct")
-        if self.trigger_mode not in {"prefix", "direct"}:
+        if self.trigger_mode not in {"prefix", "direct", "llm"}:
             logger.warning(f"[AiriVoice] 无效 trigger_mode，强制使用 direct")
             self.trigger_mode = "direct"
         
@@ -56,6 +216,14 @@ class AiriVoice(Star):
             self.admin_whitelist: Set[str] = set(str(x).strip() for x in whitelist_raw if str(x).strip())
         else:
             self.admin_whitelist: Set[str] = set()
+
+        # LLM 语音选择模式
+        self.llm_select_mode = self.config.get("llm_select_mode", "list")
+        if self.llm_select_mode not in {"list", "keyword"}:
+            logger.warning(
+                f"[AiriVoice] 无效 llm_select_mode，强制使用 list"
+            )
+            self.llm_select_mode = "list"
         
         # 语音映射
         self.voice_map: Dict[str, str] = {}
@@ -68,6 +236,24 @@ class AiriVoice(Star):
         self._update_sorted_keys()
         
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
+        
+        # 仅在触发模式为 llm 时，注册供 LLM 使用的语音相关工具
+        if self.trigger_mode == "llm":
+            llm_tools = []
+            if self.llm_select_mode == "list":
+                llm_tools.append(AiriListAllVoicesTool(plugin=self))
+            else:
+                llm_tools.append(AiriSearchVoicesTool(plugin=self))
+            llm_tools.append(AiriSendVoiceTool(plugin=self))
+
+            try:
+                # AstrBot >= v4.5.1
+                self.context.add_llm_tools(*llm_tools)
+                logger.info(
+                    f"[AiriVoice] 已为 LLM 注册 {len(llm_tools)} 个语音工具，模式：{self.llm_select_mode}"
+                )
+            except Exception as e:
+                logger.error(f"[AiriVoice] 注册 LLM 工具失败：{e}")
         
         logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}")
 
@@ -277,6 +463,58 @@ class AiriVoice(Star):
             self._load_web_voices(self.config)
             self._update_sorted_keys()
             self.last_pool_len = current_pool_len
+
+        # 随机语音：支持「随机发条语音 / 随机语音」全局随机，
+        # 以及「随机XX」根据关键词随机选择匹配的语音
+        if text.startswith("随机") and self.voice_map:
+            # 全局随机
+            if text in {"随机发条语音", "随机语音"}:
+                name = random.choice(list(self.voice_map.keys()))
+                matched_path = self.voice_map.get(name)
+                if matched_path:
+                    try:
+                        yield event.chain_result([Record.fromFileSystem(matched_path)])
+                        logger.debug(f"[AiriVoice] 随机发送语音（全局）：'{name}'")
+                    except FileNotFoundError as e:
+                        logger.error(f"[AiriVoice] 随机文件不存在 '{name}': {e}")
+                        yield event.plain_result("语音文件不存在")
+                    except Exception as e:
+                        logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
+                        yield event.plain_result(f"语音发送失败：{type(e).__name__}")
+                else:
+                    yield event.plain_result("当前没有可用语音～")
+                return
+
+            # 按关键词随机：随机XX 或 随机 XX
+            m = re.match(r"^随机\s*(.+)$", text)
+            if m:
+                kw = m.group(1).strip()
+                if not kw:
+                    return
+                candidates = [
+                    name for name in self.voice_map.keys() if kw in name
+                ]
+                if not candidates:
+                    yield event.plain_result(f"未找到包含「{kw}」的语音")
+                    return
+
+                name = random.choice(candidates)
+                matched_path = self.voice_map.get(name)
+                if matched_path:
+                    try:
+                        yield event.chain_result([Record.fromFileSystem(matched_path)])
+                        logger.debug(
+                            f"[AiriVoice] 随机发送语音（关键词「{kw}」）：'{name}'"
+                        )
+                    except FileNotFoundError as e:
+                        logger.error(f"[AiriVoice] 随机文件不存在 '{name}': {e}")
+                        yield event.plain_result("语音文件不存在")
+                    except Exception as e:
+                        logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
+                        yield event.plain_result(f"语音发送失败：{type(e).__name__}")
+                else:
+                    yield event.plain_result("当前没有可用语音～")
+                return
 
         # 获取关键词
         keyword = text
