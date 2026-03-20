@@ -148,7 +148,7 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
     "airi_voice",
     "lidure",
     "输入关键词发送对应语音",
-    "2.2",
+    "2.3",
     "https://github.com/Lidure/astrbot_plugin_airi_voice",
 )
 class AiriVoice(Star):
@@ -577,6 +577,7 @@ class AiriVoice(Star):
 【触发模式】
 🔹 direct: 直接输入关键词触发
 🔹 prefix: 使用 #voice 关键词 触发
+🔹 llm: 仅注册 LLM 工具，由大模型调用语音功能
 【命令】
 {chr(10).join(commands)}"""
         yield event.plain_result(help_msg)
