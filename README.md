@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.2-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.3-orange?style=for-the-badge)]()
 
 </div>
 
@@ -56,6 +56,9 @@
 | **LLM 模式** | 仅在需要由大模型自动选择并发送语音时启用，会为当前会话注册 `airi_*` LLM 工具 | 与 Agent 对话、需要“智能选语音”的场景 |
 
 > ⚠️ 未选择 LLM 模式时，插件只作为普通语音关键词插件工作，大模型不会看到 `airi_*` 工具。
+
+### 4. bot追加语音
+bot 回复的文本只要包含任意语音关键词，就会自动追加对应语音
 
 ---
 
