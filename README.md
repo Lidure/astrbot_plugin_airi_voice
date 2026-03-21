@@ -29,9 +29,15 @@
 
 这边推荐一个还可以的音频素材网站：
 
-https://www.tosound.com/search/word-%E6%97%A5%E8%AF%AD
+# 淘声网
+   -音频蛋没能量，可以直接F12爬取音频
 
-淘声网，音频蛋没能量，可以直接F12爬取音频
+https://www.tosound.com/
+
+# 日语素材（⭐推荐）
+
+https://amitaro.net/voice/voice_dl/
+
 ---
 
 ## 🎮 使用指南
