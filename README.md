@@ -31,7 +31,7 @@
 
 https://www.tosound.com/search/word-%E6%97%A5%E8%AF%AD
 
-淘声网
+淘声网，音频蛋没能量，可以直接F12爬取音频
 ---
 
 ## 🎮 使用指南
