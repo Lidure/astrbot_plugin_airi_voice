@@ -27,16 +27,20 @@
 | 🤖 **LLM 智能联动** | 在 LLM 模式下，由大模型自动选择并发送最合适的语音 |
 | 🆕 **引用添加语音** | 聊天中引用语音消息，一条命令即可添加新语音 |
 
-这边推荐一个还可以的音频素材网站：
+# 推荐的音频素材网站：
 
-# 淘声网
-   -音频蛋没能量，可以直接F12爬取音频
+- 淘声网
+   - 音频蛋没能量，可以直接F12爬取音频
 
-https://www.tosound.com/
+   https://www.tosound.com/
 
-# 日语素材（⭐推荐）
+- 日语素材（⭐推荐）
 
-https://amitaro.net/voice/voice_dl/
+   https://amitaro.net/voice/voice_dl/
+
+# 推荐的音频在线编辑网站：
+
+https://vocalremover.org/zh/cutter
 
 ---
 
