@@ -560,6 +560,7 @@ class AiriVoice(Star):
         is_admin = self._check_admin(event)
         commands = [
             "📋 /voice.list [页码] - 查看可用语音",
+            "🎶 /随机语音 - 随机回复一个语音",
             "❓ /voice.help - 显示此帮助",
         ]
         if is_admin:
