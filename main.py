@@ -566,7 +566,7 @@ class AiriVoice(Star):
             commands.append("➕ /voice.add 名字 - 引用语音消息添加新语音 (管理员)")
             commands.append("🗑️ /voice.delete 名字 - 删除语音 (管理员)")
             commands.append("🔄 /voice.reload - 重新加载语音列表 (管理员)")
-        help_msg = f"""🌸 AiriVoice 语音插件
+        help_msg = f"""🌸 AiriVoice 语音插件  --v2.3
 【使用方法】
 
 将语音文件放入 voices/ 目录
@@ -574,10 +574,12 @@ class AiriVoice(Star):
 或引用语音消息发送 /voice.add 名字
 文件名即为关键词（不含扩展名）
 直接输入关键词即可发送语音
+
 【触发模式】
 🔹 direct: 直接输入关键词触发
 🔹 prefix: 使用 #voice 关键词 触发
 🔹 llm: 仅注册 LLM 工具，由大模型调用语音功能
+
 【命令】
 {chr(10).join(commands)}"""
         yield event.plain_result(help_msg)
