@@ -567,8 +567,8 @@ class AiriVoice(Star):
             commands.append("🗑️ /voice.delete 名字 - 删除语音 (管理员)")
             commands.append("🔄 /voice.reload - 重新加载语音列表 (管理员)")
         help_msg = f"""🌸 AiriVoice 语音插件v2.3
-【使用方法】
 
+【使用方法】
 将语音文件放入 voices/ 目录
 或在 AstrBot 网页后台 → 插件配置 → 上传语音
 或引用语音消息发送 /voice.add 名字
