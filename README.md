@@ -34,9 +34,15 @@
 
    https://www.tosound.com/
 
-- 日语素材（⭐推荐）
+- 日语素材（⭐推荐） 需要魔法
 
    https://amitaro.net/voice/voice_dl/
+  
+- PJSK语音素材（⭐⭐推荐）
+
+  需要通过F12的网络爬取下载
+  
+  https://snowyviewer.exmeaning.com/story/self/
 
 # 推荐的音频在线编辑网站：
 
