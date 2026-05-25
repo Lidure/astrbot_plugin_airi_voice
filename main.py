@@ -500,7 +500,23 @@ class AiriVoice(Star):
             d.rounded_rectangle((x1 + 3, y1 + 5, x2 + 3, y2 + 5), radius=28, fill=(255, 255, 255, 72))
             d.rounded_rectangle((x1, y1, x2, y2), radius=28, fill=(255, 255, 255, 255), outline=(223, 228, 241, 255), width=1)
             d.rounded_rectangle((x1, y1, x1 + 6, y2), radius=6, fill=ac)
-            d.ellipse((x1 + 22, y1 + 25, x1 + 54, y1 + 57), fill=(ac[0], ac[1], ac[2], 44))
+            # try to load user-provided small badge (psc.png) and paste with highlight
+            try:
+                badge_path = self.plugin_dir / "psc.png"
+                with Image.open(badge_path) as _bi:
+                    badge_img = _bi.convert("RGBA")
+                    badge_size = 44
+                    badge_resized = badge_img.resize((badge_size, badge_size), Image.LANCZOS)
+                    # center on previous bubble center (keep visual alignment)
+                    center_x = x1 + 38
+                    center_y = y1 + 41
+                    paste_x = int(center_x - badge_size / 2)
+                    paste_y = int(center_y - badge_size / 2)
+                    # paste badge (no outer glow)
+                    img.paste(badge_resized, (paste_x, paste_y), badge_resized)
+            except Exception:
+                # fallback to colored bubble if badge missing or loading fails (solid)
+                d.ellipse((x1 + 16, y1 + 17, x1 + 60, y1 + 61), fill=(ac[0], ac[1], ac[2], 255))
             d.text((x1 + 72, y1 + 20), name, font=bf, fill=IMAGE_TEXT_COLOR)
             d.text((x1 + 72, y1 + 50), "直接输入关键词即可发送", font=hf, fill=(124, 138, 161))
 
@@ -560,13 +576,12 @@ class AiriVoice(Star):
                 "可用命令",
                 [
                     "/voice.list [页码] - 查看可用语音列表",
-                    "随机语音 - 随机发送一条语音",
-                    "/voice.help - 显示此帮助",
-                ],
-                (45, 212, 191),
-            ),
-        ]
 
+            # transparent header with subtle outline
+            header = Image.new("RGBA", (IMAGE_WIDTH, h), (0, 0, 0, 0))
+            hd = ImageDraw.Draw(header)
+            hd.rounded_rectangle((38, 30, IMAGE_WIDTH - 38, 150), radius=36, fill=(255, 255, 255, 0), outline=(255, 255, 255, 110), width=2)
+            img = Image.alpha_composite(img, header)
         if is_admin:
             sections.append(("管理员命令", [
                 "/voice.add 名字 - 引用语音消息添加新语音",
@@ -592,13 +607,13 @@ class AiriVoice(Star):
         for _, items, _ in sections:
             wrapped_lines: List[str] = []
             for item in items:
-                wrapped_lines.extend(self._wrap_text_lines(temp_draw, item, body_font, card_width - 52))
-            wrapped_sections.append(wrapped_lines)
-            card_height = card_padding_y * 2 + section_title_height + 14 + len(wrapped_lines) * card_line_height + max(0, len(wrapped_lines) - 1) * 2
-            card_heights.append(card_height)
-
-        header_height = 156
         footer_height = 84
+                d.rounded_rectangle((x1 + 3, y1 + 5, x2 + 3, y2 + 5), radius=28, fill=(255, 255, 255, 72))
+                d.rounded_rectangle((x1, y1, x2, y2), radius=28, fill=(255, 255, 255, 255), outline=(223, 228, 241, 255), width=1)
+                d.rounded_rectangle((x1, y1, x1 + 6, y2), radius=6, fill=ac)
+                d.ellipse((x1 + 22, y1 + 25, x1 + 54, y1 + 57), fill=(ac[0], ac[1], ac[2], 44))
+                d.text((x1 + 72, y1 + 20), name, font=bf, fill=IMAGE_TEXT_COLOR)
+                d.text((x1 + 72, y1 + 50), "直接输入关键词即可发送", font=hf, fill=(124, 138, 161))
         gap_between_cards = gap_y
         height = header_height + sum(card_heights) + gap_between_cards * (len(card_heights) - 1) + footer_height
 
@@ -648,11 +663,25 @@ class AiriVoice(Star):
         for index, ((section_title, _, accent), wrapped_lines, card_height, card_bg) in enumerate(zip(sections, wrapped_sections, card_heights, section_bg_colors)):
             y1 = section_y
             y2 = y1 + card_height
-            draw.rounded_rectangle((card_x + 3, y1 + 5, card_x + card_width + 3, y2 + 5), radius=28, fill=(255, 255, 255, 72))
+            # cleaner card, remove heavy shadow and full-height stripe
             draw.rounded_rectangle((card_x, y1, card_x + card_width, y2), radius=28, fill=(255, 255, 255, 255), outline=(223, 228, 241, 255), width=1)
-            draw.rounded_rectangle((card_x, y1, card_x + 6, y2), radius=6, fill=accent)
-            icon_box = (card_x + 22, y1 + 22, card_x + 58, y1 + 58)
-            draw.ellipse((card_x + 24, y1 + 24, card_x + 54, y1 + 54), fill=(accent[0], accent[1], accent[2], 44))
+            # try to load user-provided larger badge (psc2.png) and paste with highlight
+            try:
+                badge_path2 = self.plugin_dir / "psc2.png"
+                with Image.open(badge_path2) as _bi2:
+                    badge_img2 = _bi2.convert("RGBA")
+                    badge_size2 = 44
+                    badge_resized2 = badge_img2.resize((badge_size2, badge_size2), Image.LANCZOS)
+                    # enlarge and nudge a bit to keep padding consistent
+                    paste_x = card_x + 18
+                    paste_y = y1 + 18
+                    img.paste(badge_resized2, (paste_x, paste_y), badge_resized2)
+            except Exception:
+                badge_cx = card_x + 40
+                badge_cy = y1 + (card_height // 2)
+                badge_r = 22
+                draw.ellipse((badge_cx - badge_r, badge_cy - badge_r, badge_cx + badge_r, badge_cy + badge_r), fill=(accent[0], accent[1], accent[2], 255))
+            icon_box = (card_x + 18, y1 + 18, card_x + 18 + badge_size2, y1 + 18 + badge_size2)
             draw.text((card_x + 70, y1 + 20), section_title, font=section_title_font, fill=(30, 41, 59))
             text_y = y1 + 64
             # use a colored bullet with ~80% opacity for better visibility
