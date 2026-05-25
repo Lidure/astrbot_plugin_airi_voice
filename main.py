@@ -576,6 +576,9 @@ class AiriVoice(Star):
                 "可用命令",
                 [
                     "/voice.list [页码] - 查看可用语音列表",
+                ],
+                (96, 165, 250),
+            ),
 
             # transparent header with subtle outline
             header = Image.new("RGBA", (IMAGE_WIDTH, h), (0, 0, 0, 0))
