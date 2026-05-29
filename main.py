@@ -33,7 +33,18 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
     parameters: dict = Field(
         default_factory=lambda: {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "page": {
+                    "type": "integer",
+                    "description": "页码（从 1 开始）。",
+                    "default": 1,
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "每页数量（1-100）。",
+                    "default": 30,
+                },
+            },
             "required": [],
         }
     )
@@ -44,8 +55,33 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
             return "当前未开启 LLM 触发模式，本工具暂不可用。"
         if not self.plugin.voice_map:
             return "当前没有可用语音。"
+        try:
+            page = int(kwargs.get("page") or 1)
+        except Exception:
+            page = 1
+        try:
+            page_size = int(kwargs.get("page_size") or 30)
+        except Exception:
+            page_size = 30
+
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 30
+        if page_size > 100:
+            page_size = 100
+
         names = sorted(self.plugin.voice_map.keys())
-        return "当前可用语音名称列表：\n" + "\n".join(names)
+        total = len(names)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        if page > total_pages:
+            return f"页码过大，总共 {total_pages} 页。"
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_names = names[start:end]
+        header = f"当前可用语音名称列表（第 {page}/{total_pages} 页，共 {total} 个）：\n"
+        return header + "\n".join(page_names)
 
 
 @dataclass
@@ -60,7 +96,17 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
                 "keyword": {
                     "type": "string",
                     "description": "用户给出的语音关键词，用于模糊匹配语音名称。",
-                }
+                },
+                "page": {
+                    "type": "integer",
+                    "description": "页码（从 1 开始）。",
+                    "default": 1,
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "每页数量（1-100）。",
+                    "default": 30,
+                },
             },
             "required": ["keyword"],
         }
@@ -75,14 +121,46 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
         keyword = (kwargs.get("keyword") or "").strip()
         if not keyword:
             return "请提供要搜索的语音关键词。"
+        try:
+            page = int(kwargs.get("page") or 1)
+        except Exception:
+            page = 1
+        try:
+            page_size = int(kwargs.get("page_size") or 30)
+        except Exception:
+            page_size = 30
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 30
+        if page_size > 100:
+            page_size = 100
+
         keyword_lower = keyword.lower()
-        matched = [
-            name for name in self.plugin.voice_map.keys() if keyword_lower in name.lower()
-        ]
+        matched = []
+        for name in self.plugin.voice_map.keys():
+            nl = name.lower()
+            if keyword_lower in nl:
+                if nl == keyword_lower:
+                    rank = 0
+                elif nl.startswith(keyword_lower):
+                    rank = 1
+                else:
+                    rank = 2
+                matched.append((rank, name))
         if not matched:
             return f"未找到包含「{keyword}」的语音名称。"
-        matched.sort()
-        return f"根据关键词「{keyword}」筛选到的语音名称：\n" + "\n".join(matched)
+        matched.sort(key=lambda x: (x[0], x[1]))
+        matched_names = [name for _, name in matched]
+        total = len(matched_names)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        if page > total_pages:
+            return f"页码过大，总共 {total_pages} 页。"
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_names = matched_names[start:end]
+        header = f"根据关键词「{keyword}」筛选到的语音名称（第 {page}/{total_pages} 页，共 {total} 个）：\n"
+        return header + "\n".join(page_names)
 
 
 @dataclass
@@ -115,12 +193,21 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
         path = self.plugin.voice_map.get(name)
         if not path:
             return f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"
-        try:
-            agent_ctx = context.context.context
-            event = context.context.event
-        except Exception:
-            agent_ctx = None
-            event = None
+        agent_ctx = None
+        event = None
+        for candidate in (context, getattr(context, "context", None), getattr(getattr(context, "context", None), "context", None)):
+            if candidate is None:
+                continue
+            if event is None:
+                ev = getattr(candidate, "event", None)
+                if ev is not None and hasattr(ev, "unified_msg_origin"):
+                    event = ev
+            if agent_ctx is None:
+                ctx = getattr(candidate, "context", None)
+                if ctx is not None and hasattr(ctx, "send_message"):
+                    agent_ctx = ctx
+            if event is not None and agent_ctx is not None:
+                break
         if agent_ctx is None or event is None:
             return f"无法获取当前会话上下文，未能发送语音「{name}」。"
         try:
@@ -129,9 +216,8 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
                 MessageChain([Record.fromFileSystem(path)]),
             )
             logger.debug(f"[AiriVoice] LLM 工具发送语音：'{name}' → {path}")
-            # 打上本轮标记，告知后续装饰器此次对话已由工具主动发送过语音
             setattr(event, "__airi_voice_sent_by_tool__", True)
-            return ""
+            return f"已发送语音：{name}"
         except FileNotFoundError as e:
             logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
             return f"语音文件不存在：{name}"
@@ -201,10 +287,8 @@ class AiriVoice(Star):
 
         if self.trigger_mode == "llm":
             llm_tools = []
-            if self.llm_select_mode == "list":
-                llm_tools.append(AiriListAllVoicesTool(plugin=self))
-            else:
-                llm_tools.append(AiriSearchVoicesTool(plugin=self))
+            llm_tools.append(AiriListAllVoicesTool(plugin=self))
+            llm_tools.append(AiriSearchVoicesTool(plugin=self))
             llm_tools.append(AiriSendVoiceTool(plugin=self))
             try:
                 self.context.add_llm_tools(*llm_tools)
@@ -1036,6 +1120,8 @@ class AiriVoice(Star):
     async def on_bot_reply_auto_voice(self, event: AstrMessageEvent):
         """在 bot 回复文本中命中语音关键词时自动追加语音。"""
         if not self.auto_reply_voice_enabled:
+            return
+        if self.trigger_mode == "llm" and not self.config.get("auto_reply_voice_in_llm", False):
             return
         # 动态判定：本轮对话工具已成功发过语音时才跳过，否则照常允许文本命中追加
         if getattr(event, "__airi_voice_sent_by_tool__", False):

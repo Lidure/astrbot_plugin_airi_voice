@@ -37,6 +37,12 @@
     "default": false,
     "hint": "开启后，bot 回复的文本只要包含任意语音关键词，就会自动追加对应语音（推荐开启防刷屏）"
   },
+  "auto_reply_voice_in_llm": {
+    "description": "LLM 模式下允许 bot 回复自动追加语音",
+    "type": "bool",
+    "default": false,
+    "hint": "默认关闭：LLM 模式建议仅由 LLM 工具决定是否发语音，避免文本命中关键词导致非预期追加"
+  },
   "llm_select_mode": {
     "description": "LLM 语音选择模式",
     "type": "string",
