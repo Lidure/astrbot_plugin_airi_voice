@@ -1040,6 +1040,7 @@ class AiriVoice(Star):
         # 动态判定：本轮对话工具已成功发过语音时才跳过，否则照常允许文本命中追加
         if getattr(event, "__airi_voice_sent_by_tool__", False):
             logger.debug("[AiriVoice-auto] 本轮对话工具已发过语音，跳过自动追加")
+            delattr(event, "__airi_voice_sent_by_tool__")  # 用完即放，避免状态残留
             return
 
         result = event.get_result()
