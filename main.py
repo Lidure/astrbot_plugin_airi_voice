@@ -49,6 +49,20 @@ def _fuzzy_suggest(keyword: str, choices: List[str], limit: int = 5, cutoff: flo
     scored.sort(key=lambda x: (-x[0], x[1]))
     return [c for r, c in scored if r >= cutoff][:limit]
 
+def _resolve_voice_name(raw_name: str, voice_map: Dict[str, str]):
+    if raw_name in voice_map:
+        return raw_name, []
+    keys = list(voice_map.keys())
+    target = _normalize_for_match(raw_name)
+    if target:
+        exact_norm = [k for k in keys if _normalize_for_match(k) == target]
+        if len(exact_norm) == 1:
+            return exact_norm[0], []
+        if len(exact_norm) > 1:
+            return None, exact_norm[:5]
+    suggestions = _fuzzy_suggest(raw_name, keys)
+    return None, suggestions
+
 def _extract_send_context(wrapper: Any):
     agent_ctx = None
     event = None
@@ -262,30 +276,39 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
         name = (kwargs.get("name") or "").strip()
         if not name:
             return _tool_json({"error": "invalid_name", "message": "请提供要发送的语音名称。"})
-        path = self.plugin.voice_map.get(name)
+        resolved_name, suggestions = _resolve_voice_name(name, self.plugin.voice_map)
+        if not resolved_name:
+            payload = {"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"}
+            if suggestions:
+                payload["suggestions"] = suggestions
+            return _tool_json(payload)
+        path = self.plugin.voice_map.get(resolved_name)
         if not path:
-            return _tool_json({"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"})
+            return _tool_json({"error": "voice_not_found", "name": resolved_name, "message": f"语音「{resolved_name}」不存在，请先使用列出/搜索工具确认可用名称。"})
         agent_ctx, event = _extract_send_context(context)
         if agent_ctx is None or event is None:
-            return _tool_json({"error": "missing_context", "name": name, "message": f"无法获取当前会话上下文，未能发送语音「{name}」。"})
+            return _tool_json({"error": "missing_context", "name": resolved_name, "message": f"无法获取当前会话上下文，未能发送语音「{resolved_name}」。"})
         try:
             await _send_message_with_retry(
                 agent_ctx,
                 event.unified_msg_origin,
                 MessageChain([Record.fromFileSystem(path)]),
             )
-            logger.debug(f"[AiriVoice] LLM 工具发送语音：'{name}' → {path}")
+            logger.debug(f"[AiriVoice] LLM 工具发送语音：'{resolved_name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
-            return _tool_json({"sent": name})
+            payload = {"sent": resolved_name}
+            if resolved_name != name:
+                payload["alias"] = name
+            return _tool_json(payload)
         except FileNotFoundError as e:
-            logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
-            return _tool_json({"error": "file_not_found", "name": name, "message": f"语音文件不存在：{name}"})
+            logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{resolved_name}': {e}")
+            return _tool_json({"error": "file_not_found", "name": resolved_name, "message": f"语音文件不存在：{resolved_name}"})
         except Exception as e:
             if _is_timeout_error(e):
-                logger.error(f"[AiriVoice] LLM 工具发送超时 '{name}': {e}")
-                return _tool_json({"error": "send_timeout", "name": name, "message": "语音发送超时，请稍后重试。"})
-            logger.error(f"[AiriVoice] LLM 工具发送失败 '{name}': {e}")
-            return _tool_json({"error": "send_failed", "name": name, "message": f"语音发送失败：{type(e).__name__}"})
+                logger.error(f"[AiriVoice] LLM 工具发送超时 '{resolved_name}': {e}")
+                return _tool_json({"error": "send_timeout", "name": resolved_name, "message": "语音发送超时，请稍后重试。"})
+            logger.error(f"[AiriVoice] LLM 工具发送失败 '{resolved_name}': {e}")
+            return _tool_json({"error": "send_failed", "name": resolved_name, "message": f"语音发送失败：{type(e).__name__}"})
 
 
 @dataclass
