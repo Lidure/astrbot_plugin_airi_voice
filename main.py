@@ -28,6 +28,24 @@ IMAGE_TEXT_COLOR = (44, 51, 74)
 def _tool_json(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+def _extract_send_context(wrapper: Any):
+    agent_ctx = None
+    event = None
+    for candidate in (wrapper, getattr(wrapper, "context", None), getattr(getattr(wrapper, "context", None), "context", None)):
+        if candidate is None:
+            continue
+        if event is None:
+            ev = getattr(candidate, "event", None)
+            if ev is not None and hasattr(ev, "unified_msg_origin"):
+                event = ev
+        if agent_ctx is None:
+            ctx = getattr(candidate, "context", None)
+            if ctx is not None and hasattr(ctx, "send_message"):
+                agent_ctx = ctx
+        if event is not None and agent_ctx is not None:
+            break
+    return agent_ctx, event
+
 
 @dataclass
 class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
@@ -201,21 +219,7 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
         path = self.plugin.voice_map.get(name)
         if not path:
             return _tool_json({"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"})
-        agent_ctx = None
-        event = None
-        for candidate in (context, getattr(context, "context", None), getattr(getattr(context, "context", None), "context", None)):
-            if candidate is None:
-                continue
-            if event is None:
-                ev = getattr(candidate, "event", None)
-                if ev is not None and hasattr(ev, "unified_msg_origin"):
-                    event = ev
-            if agent_ctx is None:
-                ctx = getattr(candidate, "context", None)
-                if ctx is not None and hasattr(ctx, "send_message"):
-                    agent_ctx = ctx
-            if event is not None and agent_ctx is not None:
-                break
+        agent_ctx, event = _extract_send_context(context)
         if agent_ctx is None or event is None:
             return _tool_json({"error": "missing_context", "name": name, "message": f"无法获取当前会话上下文，未能发送语音「{name}」。"})
         try:
@@ -226,6 +230,66 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             logger.debug(f"[AiriVoice] LLM 工具发送语音：'{name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
             return _tool_json({"sent": name})
+        except FileNotFoundError as e:
+            logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
+            return _tool_json({"error": "file_not_found", "name": name, "message": f"语音文件不存在：{name}"})
+        except Exception as e:
+            logger.error(f"[AiriVoice] LLM 工具发送失败 '{name}': {e}")
+            return _tool_json({"error": "send_failed", "name": name, "message": f"语音发送失败：{type(e).__name__}"})
+
+
+@dataclass
+class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
+    """随机发送一条语音（可选按关键词过滤）。"""
+    name: str = "airi_send_random_voice"
+    description: str = "随机发送一条语音到当前会话。可选 keyword 用于过滤候选语音名称。"
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "description": "可选：仅在语音名称中包含该关键词的候选里随机选择。",
+                }
+            },
+            "required": [],
+        }
+    )
+    plugin: Any = None
+
+    async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
+        if not self.plugin.voice_map:
+            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
+
+        keyword = (kwargs.get("keyword") or "").strip()
+        if keyword:
+            candidates = [n for n in self.plugin.voice_map.keys() if keyword.lower() in n.lower()]
+            if not candidates:
+                return _tool_json({"error": "not_found", "keyword": keyword, "message": f"未找到包含「{keyword}」的语音名称。"})
+        else:
+            candidates = list(self.plugin.voice_map.keys())
+
+        name = random.choice(candidates)
+        path = self.plugin.voice_map.get(name)
+        if not path:
+            return _tool_json({"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"})
+
+        agent_ctx, event = _extract_send_context(context)
+        if agent_ctx is None or event is None:
+            return _tool_json({"error": "missing_context", "name": name, "message": f"无法获取当前会话上下文，未能发送语音「{name}」。"})
+        try:
+            await agent_ctx.send_message(
+                event.unified_msg_origin,
+                MessageChain([Record.fromFileSystem(path)]),
+            )
+            logger.debug(f"[AiriVoice] LLM 工具随机发送语音：'{name}' → {path}")
+            setattr(event, "__airi_voice_sent_by_tool__", True)
+            payload = {"sent": name, "random": True}
+            if keyword:
+                payload["keyword"] = keyword
+            return _tool_json(payload)
         except FileNotFoundError as e:
             logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
             return _tool_json({"error": "file_not_found", "name": name, "message": f"语音文件不存在：{name}"})
@@ -298,6 +362,7 @@ class AiriVoice(Star):
             llm_tools.append(AiriListAllVoicesTool(plugin=self))
             llm_tools.append(AiriSearchVoicesTool(plugin=self))
             llm_tools.append(AiriSendVoiceTool(plugin=self))
+            llm_tools.append(AiriSendRandomVoiceTool(plugin=self))
             try:
                 self.context.add_llm_tools(*llm_tools)
                 logger.info(f"[AiriVoice] 已为 LLM 注册 {len(llm_tools)} 个语音工具，模式：{self.llm_select_mode}")
