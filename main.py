@@ -30,6 +30,15 @@ IMAGE_TEXT_COLOR = (44, 51, 74)
 def _tool_json(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+def _tool_ok(data: dict) -> str:
+    return _tool_json({"ok": True, "data": data})
+
+def _tool_err(code: str, message: str, meta: Optional[dict] = None) -> str:
+    payload = {"ok": False, "error": {"code": code, "message": message}}
+    if meta:
+        payload["error"]["meta"] = meta
+    return _tool_json(payload)
+
 def _normalize_for_match(text: str) -> str:
     if text is None:
         return ""
@@ -130,9 +139,9 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
+            return _tool_err("llm_mode_disabled", "当前未开启 LLM 触发模式，本工具暂不可用。")
         if not self.plugin.voice_map:
-            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
+            return _tool_err("no_voices", "当前没有可用语音。")
         try:
             page = int(kwargs.get("page") or 1)
         except Exception:
@@ -153,15 +162,15 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
         total = len(names)
         total_pages = max(1, (total + page_size - 1) // page_size)
         if page > total_pages:
-            return _tool_json({"error": "page_out_of_range", "total_pages": total_pages})
+            return _tool_err("page_out_of_range", "页码超出范围。", {"total_pages": total_pages})
 
         start = (page - 1) * page_size
         end = start + page_size
         page_names = names[start:end]
-        payload = {"total": total, "names": page_names}
+        payload: dict = {"total": total, "names": page_names}
         if total_pages > 1:
             payload.update({"page": page, "total_pages": total_pages})
-        return _tool_json(payload)
+        return _tool_ok(payload)
 
 
 @dataclass
@@ -195,12 +204,12 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
+            return _tool_err("llm_mode_disabled", "当前未开启 LLM 触发模式，本工具暂不可用。")
         if not self.plugin.voice_map:
-            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
+            return _tool_err("no_voices", "当前没有可用语音。")
         keyword = (kwargs.get("keyword") or "").strip()
         if not keyword:
-            return _tool_json({"error": "invalid_keyword", "message": "请提供要搜索的语音关键词。"})
+            return _tool_err("invalid_keyword", "请提供要搜索的语音关键词。")
         try:
             page = int(kwargs.get("page") or 1)
         except Exception:
@@ -230,23 +239,23 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
                 matched.append((rank, name))
         if not matched:
             suggestions = _fuzzy_suggest(keyword, list(self.plugin.voice_map.keys()))
-            payload = {"error": "not_found", "keyword": keyword, "message": f"未找到包含「{keyword}」的语音名称。"}
+            meta = {"keyword": keyword}
             if suggestions:
-                payload["suggestions"] = suggestions
-            return _tool_json(payload)
+                meta["suggestions"] = suggestions
+            return _tool_err("not_found", f"未找到包含「{keyword}」的语音名称。", meta)
         matched.sort(key=lambda x: (x[0], x[1]))
         matched_names = [name for _, name in matched]
         total = len(matched_names)
         total_pages = max(1, (total + page_size - 1) // page_size)
         if page > total_pages:
-            return _tool_json({"error": "page_out_of_range", "total_pages": total_pages})
+            return _tool_err("page_out_of_range", "页码超出范围。", {"total_pages": total_pages})
         start = (page - 1) * page_size
         end = start + page_size
         page_names = matched_names[start:end]
-        payload = {"keyword": keyword, "total": total, "names": page_names}
+        payload: dict = {"keyword": keyword, "total": total, "names": page_names}
         if total_pages > 1:
             payload.update({"page": page, "total_pages": total_pages})
-        return _tool_json(payload)
+        return _tool_ok(payload)
 
 
 @dataclass
@@ -270,12 +279,12 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
+            return _tool_err("llm_mode_disabled", "当前未开启 LLM 触发模式，本工具暂不可用。")
         if not self.plugin.voice_map:
-            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
+            return _tool_err("no_voices", "当前没有可用语音。")
         name = (kwargs.get("name") or "").strip()
         if not name:
-            return _tool_json({"error": "invalid_name", "message": "请提供要发送的语音名称。"})
+            return _tool_err("invalid_name", "请提供要发送的语音名称。")
         resolved_name, suggestions = _resolve_voice_name(name, self.plugin.voice_map)
         auto_corrected = False
         if not resolved_name:
@@ -283,16 +292,16 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
                 resolved_name = suggestions[0]
                 auto_corrected = True
             else:
-                payload = {"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"}
+                meta = {"name": name}
                 if suggestions:
-                    payload["suggestions"] = suggestions
-                return _tool_json(payload)
+                    meta["suggestions"] = suggestions
+                return _tool_err("voice_not_found", f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。", meta)
         path = self.plugin.voice_map.get(resolved_name)
         if not path:
-            return _tool_json({"error": "voice_not_found", "name": resolved_name, "message": f"语音「{resolved_name}」不存在，请先使用列出/搜索工具确认可用名称。"})
+            return _tool_err("voice_not_found", f"语音「{resolved_name}」不存在，请先使用列出/搜索工具确认可用名称。", {"name": resolved_name})
         agent_ctx, event = _extract_send_context(context)
         if agent_ctx is None or event is None:
-            return _tool_json({"error": "missing_context", "name": resolved_name, "message": f"无法获取当前会话上下文，未能发送语音「{resolved_name}」。"})
+            return _tool_err("missing_context", f"无法获取当前会话上下文，未能发送语音「{resolved_name}」。", {"name": resolved_name})
         try:
             await _send_message_with_retry(
                 agent_ctx,
@@ -301,21 +310,21 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             )
             logger.debug(f"[AiriVoice] LLM 工具发送语音：'{resolved_name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
-            payload = {"sent": resolved_name}
+            payload: dict = {"sent": resolved_name}
             if resolved_name != name:
                 payload["alias"] = name
             if auto_corrected:
                 payload["auto_corrected"] = True
-            return _tool_json(payload)
+            return _tool_ok(payload)
         except FileNotFoundError as e:
             logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{resolved_name}': {e}")
-            return _tool_json({"error": "file_not_found", "name": resolved_name, "message": f"语音文件不存在：{resolved_name}"})
+            return _tool_err("file_not_found", f"语音文件不存在：{resolved_name}", {"name": resolved_name})
         except Exception as e:
             if _is_timeout_error(e):
                 logger.error(f"[AiriVoice] LLM 工具发送超时 '{resolved_name}': {e}")
-                return _tool_json({"error": "send_timeout", "name": resolved_name, "message": "语音发送超时，请稍后重试。"})
+                return _tool_err("send_timeout", "语音发送超时，请稍后重试。", {"name": resolved_name})
             logger.error(f"[AiriVoice] LLM 工具发送失败 '{resolved_name}': {e}")
-            return _tool_json({"error": "send_failed", "name": resolved_name, "message": f"语音发送失败：{type(e).__name__}"})
+            return _tool_err("send_failed", f"语音发送失败：{type(e).__name__}", {"name": resolved_name})
 
 
 @dataclass
@@ -339,26 +348,26 @@ class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
+            return _tool_err("llm_mode_disabled", "当前未开启 LLM 触发模式，本工具暂不可用。")
         if not self.plugin.voice_map:
-            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
+            return _tool_err("no_voices", "当前没有可用语音。")
 
         keyword = (kwargs.get("keyword") or "").strip()
         if keyword:
             candidates = [n for n in self.plugin.voice_map.keys() if keyword.lower() in n.lower()]
             if not candidates:
-                return _tool_json({"error": "not_found", "keyword": keyword, "message": f"未找到包含「{keyword}」的语音名称。"})
+                return _tool_err("not_found", f"未找到包含「{keyword}」的语音名称。", {"keyword": keyword})
         else:
             candidates = list(self.plugin.voice_map.keys())
 
         name = random.choice(candidates)
         path = self.plugin.voice_map.get(name)
         if not path:
-            return _tool_json({"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"})
+            return _tool_err("voice_not_found", f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。", {"name": name})
 
         agent_ctx, event = _extract_send_context(context)
         if agent_ctx is None or event is None:
-            return _tool_json({"error": "missing_context", "name": name, "message": f"无法获取当前会话上下文，未能发送语音「{name}」。"})
+            return _tool_err("missing_context", f"无法获取当前会话上下文，未能发送语音「{name}」。", {"name": name})
         try:
             await _send_message_with_retry(
                 agent_ctx,
@@ -367,19 +376,102 @@ class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
             )
             logger.debug(f"[AiriVoice] LLM 工具随机发送语音：'{name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
-            payload = {"sent": name, "random": True}
+            payload: dict = {"sent": name, "random": True}
             if keyword:
                 payload["keyword"] = keyword
-            return _tool_json(payload)
+            return _tool_ok(payload)
         except FileNotFoundError as e:
             logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
-            return _tool_json({"error": "file_not_found", "name": name, "message": f"语音文件不存在：{name}"})
+            return _tool_err("file_not_found", f"语音文件不存在：{name}", {"name": name})
         except Exception as e:
             if _is_timeout_error(e):
                 logger.error(f"[AiriVoice] LLM 工具发送超时 '{name}': {e}")
-                return _tool_json({"error": "send_timeout", "name": name, "message": "语音发送超时，请稍后重试。"})
+                return _tool_err("send_timeout", "语音发送超时，请稍后重试。", {"name": name})
             logger.error(f"[AiriVoice] LLM 工具发送失败 '{name}': {e}")
-            return _tool_json({"error": "send_failed", "name": name, "message": f"语音发送失败：{type(e).__name__}"})
+            return _tool_err("send_failed", f"语音发送失败：{type(e).__name__}", {"name": name})
+
+
+@dataclass
+class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
+    """批量发送语音（按顺序）。"""
+    name: str = "airi_send_voices"
+    description: str = "按顺序发送多条语音。每条都会进行名称纠错与发送重试。"
+    parameters: dict = Field(
+        default_factory=lambda: {
+            "type": "object",
+            "properties": {
+                "names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "要发送的语音名称列表。",
+                }
+            },
+            "required": ["names"],
+        }
+    )
+    plugin: Any = None
+
+    async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
+        if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
+            return _tool_err("llm_mode_disabled", "当前未开启 LLM 触发模式，本工具暂不可用。")
+        if not self.plugin.voice_map:
+            return _tool_err("no_voices", "当前没有可用语音。")
+        names = kwargs.get("names")
+        if not isinstance(names, list) or not names:
+            return _tool_err("invalid_names", "请提供要发送的语音名称列表。")
+
+        agent_ctx, event = _extract_send_context(context)
+        if agent_ctx is None or event is None:
+            return _tool_err("missing_context", "无法获取当前会话上下文，未能批量发送语音。")
+
+        results: List[dict] = []
+        for raw in names:
+            raw_name = str(raw or "").strip()
+            if not raw_name:
+                results.append({"ok": False, "error": {"code": "invalid_name", "message": "语音名称为空。"}})
+                continue
+
+            resolved_name, suggestions = _resolve_voice_name(raw_name, self.plugin.voice_map)
+            auto_corrected = False
+            if not resolved_name:
+                if len(suggestions) == 1:
+                    resolved_name = suggestions[0]
+                    auto_corrected = True
+                else:
+                    item = {"ok": False, "error": {"code": "voice_not_found", "message": f"语音「{raw_name}」不存在。", "meta": {"name": raw_name}}}
+                    if suggestions:
+                        item["error"]["meta"]["suggestions"] = suggestions
+                    results.append(item)
+                    continue
+
+            path = self.plugin.voice_map.get(resolved_name)
+            if not path:
+                results.append({"ok": False, "error": {"code": "voice_not_found", "message": f"语音「{resolved_name}」不存在。", "meta": {"name": resolved_name}}})
+                continue
+
+            try:
+                await _send_message_with_retry(
+                    agent_ctx,
+                    event.unified_msg_origin,
+                    MessageChain([Record.fromFileSystem(path)]),
+                )
+                setattr(event, "__airi_voice_sent_by_tool__", True)
+                item: dict = {"ok": True, "data": {"sent": resolved_name}}
+                if resolved_name != raw_name:
+                    item["data"]["alias"] = raw_name
+                if auto_corrected:
+                    item["data"]["auto_corrected"] = True
+                results.append(item)
+                await asyncio.sleep(0.2)
+            except FileNotFoundError:
+                results.append({"ok": False, "error": {"code": "file_not_found", "message": f"语音文件不存在：{resolved_name}", "meta": {"name": resolved_name}}})
+            except Exception as e:
+                if _is_timeout_error(e):
+                    results.append({"ok": False, "error": {"code": "send_timeout", "message": "语音发送超时，请稍后重试。", "meta": {"name": resolved_name}}})
+                else:
+                    results.append({"ok": False, "error": {"code": "send_failed", "message": f"语音发送失败：{type(e).__name__}", "meta": {"name": resolved_name}}})
+
+        return _tool_ok({"results": results})
 
 
 @register(
@@ -447,6 +539,7 @@ class AiriVoice(Star):
             llm_tools.append(AiriSearchVoicesTool(plugin=self))
             llm_tools.append(AiriSendVoiceTool(plugin=self))
             llm_tools.append(AiriSendRandomVoiceTool(plugin=self))
+            llm_tools.append(AiriSendVoicesTool(plugin=self))
             try:
                 self.context.add_llm_tools(*llm_tools)
                 logger.info(f"[AiriVoice] 已为 LLM 注册 {len(llm_tools)} 个语音工具，模式：{self.llm_select_mode}")
