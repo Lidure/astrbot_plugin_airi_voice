@@ -10,6 +10,10 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-2.5-orange?style=for-the-badge)]()
 
+<a href="https://count.getloli.com" target="_blank">
+	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
+</a>
+
 </div>
 
 ---
