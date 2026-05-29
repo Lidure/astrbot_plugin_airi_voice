@@ -25,6 +25,9 @@ IMAGE_BG_COLOR_TOP = (252, 248, 255)
 IMAGE_BG_COLOR_BOTTOM = (244, 249, 255)
 IMAGE_TEXT_COLOR = (44, 51, 74)
 
+def _tool_json(payload: dict) -> str:
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
 
 @dataclass
 class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
@@ -53,9 +56,9 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
         if not self.plugin.voice_map:
-            return "当前没有可用语音。"
+            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
         try:
             page = int(kwargs.get("page") or 1)
         except Exception:
@@ -76,11 +79,7 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
         total = len(names)
         total_pages = max(1, (total + page_size - 1) // page_size)
         if page > total_pages:
-            return json.dumps(
-                {"error": "page_out_of_range", "total_pages": total_pages},
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
+            return _tool_json({"error": "page_out_of_range", "total_pages": total_pages})
 
         start = (page - 1) * page_size
         end = start + page_size
@@ -88,7 +87,7 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
         payload = {"total": total, "names": page_names}
         if total_pages > 1:
             payload.update({"page": page, "total_pages": total_pages})
-        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        return _tool_json(payload)
 
 
 @dataclass
@@ -122,12 +121,12 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
         if not self.plugin.voice_map:
-            return "当前没有可用语音。"
+            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
         keyword = (kwargs.get("keyword") or "").strip()
         if not keyword:
-            return "请提供要搜索的语音关键词。"
+            return _tool_json({"error": "invalid_keyword", "message": "请提供要搜索的语音关键词。"})
         try:
             page = int(kwargs.get("page") or 1)
         except Exception:
@@ -156,24 +155,20 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
                     rank = 2
                 matched.append((rank, name))
         if not matched:
-            return f"未找到包含「{keyword}」的语音名称。"
+            return _tool_json({"error": "not_found", "keyword": keyword, "message": f"未找到包含「{keyword}」的语音名称。"})
         matched.sort(key=lambda x: (x[0], x[1]))
         matched_names = [name for _, name in matched]
         total = len(matched_names)
         total_pages = max(1, (total + page_size - 1) // page_size)
         if page > total_pages:
-            return json.dumps(
-                {"error": "page_out_of_range", "total_pages": total_pages},
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
+            return _tool_json({"error": "page_out_of_range", "total_pages": total_pages})
         start = (page - 1) * page_size
         end = start + page_size
         page_names = matched_names[start:end]
         payload = {"keyword": keyword, "total": total, "names": page_names}
         if total_pages > 1:
             payload.update({"page": page, "total_pages": total_pages})
-        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        return _tool_json(payload)
 
 
 @dataclass
@@ -197,15 +192,15 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs) -> ToolExecResult:
         if not self.plugin or getattr(self.plugin, "trigger_mode", None) != "llm":
-            return "当前未开启 LLM 触发模式，本工具暂不可用。"
+            return _tool_json({"error": "llm_mode_disabled", "message": "当前未开启 LLM 触发模式，本工具暂不可用。"})
         if not self.plugin.voice_map:
-            return "当前没有可用语音。"
+            return _tool_json({"error": "no_voices", "message": "当前没有可用语音。"})
         name = (kwargs.get("name") or "").strip()
         if not name:
-            return "请提供要发送的语音名称。"
+            return _tool_json({"error": "invalid_name", "message": "请提供要发送的语音名称。"})
         path = self.plugin.voice_map.get(name)
         if not path:
-            return f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"
+            return _tool_json({"error": "voice_not_found", "name": name, "message": f"语音「{name}」不存在，请先使用列出/搜索工具确认可用名称。"})
         agent_ctx = None
         event = None
         for candidate in (context, getattr(context, "context", None), getattr(getattr(context, "context", None), "context", None)):
@@ -222,7 +217,7 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             if event is not None and agent_ctx is not None:
                 break
         if agent_ctx is None or event is None:
-            return f"无法获取当前会话上下文，未能发送语音「{name}」。"
+            return _tool_json({"error": "missing_context", "name": name, "message": f"无法获取当前会话上下文，未能发送语音「{name}」。"})
         try:
             await agent_ctx.send_message(
                 event.unified_msg_origin,
@@ -230,13 +225,13 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             )
             logger.debug(f"[AiriVoice] LLM 工具发送语音：'{name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
-            return json.dumps({"sent": name}, ensure_ascii=False, separators=(",", ":"))
+            return _tool_json({"sent": name})
         except FileNotFoundError as e:
             logger.error(f"[AiriVoice] 文件不存在（LLM 工具） '{name}': {e}")
-            return f"语音文件不存在：{name}"
+            return _tool_json({"error": "file_not_found", "name": name, "message": f"语音文件不存在：{name}"})
         except Exception as e:
             logger.error(f"[AiriVoice] LLM 工具发送失败 '{name}': {e}")
-            return f"语音发送失败：{type(e).__name__}"
+            return _tool_json({"error": "send_failed", "name": name, "message": f"语音发送失败：{type(e).__name__}"})
 
 
 @register(
