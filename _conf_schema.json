@@ -53,7 +53,7 @@
   "llm_tools_inject_mode": {
     "description": "LLM 工具注入策略",
     "type": "string",
-    "hint": "always: 每次对话都注入语音工具（更稳定但更耗 token）；on_demand: 仅当用户消息像“发语音/随机/语音列表”等请求时注入，可显著降低输入 token",
+    "hint": "always: 每次对话都注入语音工具，由模型自行判断是否调用；on_demand: 仅当命中“发/发送/随机/语音列表/搜索语音”等语音意图时才注入工具，可显著降低输入 token",
     "default": "always",
     "options": ["always", "on_demand"]
   },

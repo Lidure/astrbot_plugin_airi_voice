@@ -80,14 +80,29 @@ _LLM_TOOL_NAMES = {
     "airi_send_voices",
 }
 
-def _is_voice_intent(text: str) -> bool:
+_VOICE_QUESTION_MARKERS = ("是什么意思", "什么意思", "含义")
+
+def _is_voice_intent(text: str, voice_keys: Optional[List[str]] = None) -> bool:
     t = (text or "").strip()
     if not t:
+        return False
+    if any(m in t for m in _VOICE_QUESTION_MARKERS) and not re.search(r"(?:发送|发|来一条|来个)", t):
         return False
     if t in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个", "再发一次"}:
         return True
     if t.startswith("随机"):
-        return True
+        rest = t[2:].strip()
+        if not rest:
+            return True
+        if "语音" in rest or "发" in rest:
+            return True
+        if voice_keys:
+            rest_norm = _normalize_for_match(rest)
+            if rest_norm and any(rest_norm in _normalize_for_match(k) for k in voice_keys):
+                return True
+            if _fuzzy_suggest(rest, list(voice_keys), limit=3):
+                return True
+        return False
     if "随机" in t and ("语音" in t or "发" in t):
         return True
     if re.match(r"^(?:发送|发)\s*.+$", t):
@@ -98,14 +113,18 @@ def _is_voice_intent(text: str) -> bool:
         return True
     return False
 
-def _allowed_llm_tools_for_text(text: str) -> Set[str]:
+def _allowed_llm_tools_for_text(text: str, voice_keys: Optional[List[str]] = None) -> Set[str]:
     t = (text or "").strip()
     if not t:
+        return set()
+    if any(m in t for m in _VOICE_QUESTION_MARKERS) and not re.search(r"(?:发送|发|来一条|来个)", t):
         return set()
     if t in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个", "再发一次"}:
         return {"airi_send_random_voice"}
     if t.startswith("随机"):
-        return {"airi_send_random_voice"}
+        if _is_voice_intent(t, voice_keys):
+            return {"airi_send_random_voice"}
+        return set()
     if "随机" in t and ("语音" in t or "发" in t):
         return {"airi_send_random_voice"}
     if re.match(r"^(?:发送|发)\s*.+$", t):
@@ -687,10 +706,11 @@ class AiriVoice(Star):
         if getattr(self, "llm_tools_inject_mode", "always") != "on_demand":
             return
         text = (event.message_str or "").strip()
-        if not _is_voice_intent(text):
+        voice_keys = list(self.voice_map.keys())
+        if not _is_voice_intent(text, voice_keys):
             _filter_req_tools(req, set())
             return
-        allow = _allowed_llm_tools_for_text(text)
+        allow = _allowed_llm_tools_for_text(text, voice_keys)
         _filter_req_tools(req, allow)
 
         if self.auto_reply_voice_enabled:
@@ -1403,12 +1423,19 @@ class AiriVoice(Star):
                 m = re.match(r"^随机\s*(.+)$", text)
                 if m:
                     kw = m.group(1).strip()
+                    if any(x in kw for x in _VOICE_QUESTION_MARKERS):
+                        return
                     candidates = [n for n in self.voice_map.keys() if kw in n]
                     if not candidates:
-                        yield event.plain_result(f"未找到包含「{kw}」的语音")
-                        if hasattr(event, "should_call_llm"):
-                            event.should_call_llm(False)
-                        return
+                        kw_norm = _normalize_for_match(kw)
+                        if kw_norm:
+                            candidates = [n for n in self.voice_map.keys() if kw_norm in _normalize_for_match(n)]
+                    if not candidates:
+                        suggestions = _fuzzy_suggest(kw, list(self.voice_map.keys()), limit=3)
+                        if len(suggestions) == 1:
+                            candidates = suggestions
+                        else:
+                            return
                     name = random.choice(candidates)
                     matched_path = self.voice_map.get(name)
                     if matched_path:
