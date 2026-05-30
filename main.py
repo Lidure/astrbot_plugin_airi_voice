@@ -84,6 +84,8 @@ def _is_voice_intent(text: str) -> bool:
     t = (text or "").strip()
     if not t:
         return False
+    if t in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个"}:
+        return True
     if t.startswith("随机"):
         return True
     if re.match(r"^(?:发送|发)\s*.+$", t):
@@ -98,6 +100,8 @@ def _allowed_llm_tools_for_text(text: str) -> Set[str]:
     t = (text or "").strip()
     if not t:
         return set()
+    if t in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个"}:
+        return {"airi_send_random_voice"}
     if t.startswith("随机"):
         return {"airi_send_random_voice"}
     if re.match(r"^(?:发送|发)\s*.+$", t):
@@ -1350,6 +1354,19 @@ class AiriVoice(Star):
         if self.trigger_mode == "llm":
             text = (event.message_str or "").strip()
             if not text:
+                return
+            if text in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个"} and self.voice_map:
+                name = random.choice(list(self.voice_map.keys()))
+                matched_path = self.voice_map.get(name)
+                if matched_path:
+                    try:
+                        yield event.chain_result([Record.fromFileSystem(matched_path)])
+                        setattr(event, "__airi_voice_sent_by_tool__", True)
+                        if hasattr(event, "should_call_llm"):
+                            event.should_call_llm(False)
+                    except Exception as e:
+                        logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
+                        yield event.plain_result("语音发送失败")
                 return
             if text.startswith("随机") and self.voice_map:
                 if text in {"随机发条语音", "随机语音"}:
