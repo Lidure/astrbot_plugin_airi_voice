@@ -1209,6 +1209,87 @@ class AiriVoice(Star):
         """处理普通文本触发、随机语音和前缀模式。"""
         # LLM 模式下由大模型工具调用处理，此处不做任何关键词匹配，避免与工具流冲突
         if self.trigger_mode == "llm":
+            text = (event.message_str or "").strip()
+            if not text:
+                return
+            if text.startswith("随机") and self.voice_map:
+                if text in {"随机发条语音", "随机语音"}:
+                    name = random.choice(list(self.voice_map.keys()))
+                    matched_path = self.voice_map.get(name)
+                    if matched_path:
+                        try:
+                            yield event.chain_result([Record.fromFileSystem(matched_path)])
+                            setattr(event, "__airi_voice_sent_by_tool__", True)
+                            if hasattr(event, "should_call_llm"):
+                                event.should_call_llm(False)
+                        except Exception as e:
+                            logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
+                            yield event.plain_result("语音发送失败")
+                    return
+
+                m = re.match(r"^随机\s*(.+)$", text)
+                if m:
+                    kw = m.group(1).strip()
+                    candidates = [n for n in self.voice_map.keys() if kw in n]
+                    if not candidates:
+                        yield event.plain_result(f"未找到包含「{kw}」的语音")
+                        if hasattr(event, "should_call_llm"):
+                            event.should_call_llm(False)
+                        return
+                    name = random.choice(candidates)
+                    matched_path = self.voice_map.get(name)
+                    if matched_path:
+                        try:
+                            yield event.chain_result([Record.fromFileSystem(matched_path)])
+                            setattr(event, "__airi_voice_sent_by_tool__", True)
+                            if hasattr(event, "should_call_llm"):
+                                event.should_call_llm(False)
+                        except Exception as e:
+                            logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
+                            yield event.plain_result("语音发送失败")
+                    return
+
+            m = re.match(r"^(?:发送|发)\s*(.+)$", text)
+            if not m:
+                return
+            raw = m.group(1).strip()
+            parts = [p.strip() for p in re.split(r"[、,，\s]+|和|与|以及", raw) if p.strip()]
+            if not parts:
+                return
+            any_sent = False
+            unresolved = []
+            for p in parts:
+                resolved_name, suggestions = _resolve_voice_name(p, self.voice_map)
+                auto_corrected = False
+                if not resolved_name:
+                    if len(suggestions) == 1:
+                        resolved_name = suggestions[0]
+                        auto_corrected = True
+                    else:
+                        if suggestions:
+                            unresolved.append(f"{p} -> " + " / ".join(suggestions))
+                        else:
+                            unresolved.append(p)
+                        continue
+                path = self.voice_map.get(resolved_name)
+                if not path:
+                    unresolved.append(p)
+                    continue
+                try:
+                    yield event.chain_result([Record.fromFileSystem(path)])
+                    any_sent = True
+                except Exception as e:
+                    logger.error(f"[AiriVoice] 发送失败 '{resolved_name}': {e}")
+                    unresolved.append(p)
+                    continue
+                if auto_corrected:
+                    pass
+            if unresolved:
+                yield event.plain_result("以下语音未找到或发送失败：\n" + "\n".join(unresolved))
+            if any_sent:
+                setattr(event, "__airi_voice_sent_by_tool__", True)
+            if hasattr(event, "should_call_llm"):
+                event.should_call_llm(False)
             return
         text = (event.message_str or "").strip()
         if not text:
