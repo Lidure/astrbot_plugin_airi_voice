@@ -82,38 +82,7 @@ _LLM_TOOL_NAMES = {
 
 _VOICE_QUESTION_MARKERS = ("是什么意思", "什么意思", "含义")
 
-def _is_voice_intent(text: str, voice_keys: Optional[List[str]] = None) -> bool:
-    t = (text or "").strip()
-    if not t:
-        return False
-    if any(m in t for m in _VOICE_QUESTION_MARKERS) and not re.search(r"(?:发送|发|来一条|来个)", t):
-        return False
-    if t in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个", "再发一次"}:
-        return True
-    if t.startswith("随机"):
-        rest = t[2:].strip()
-        if not rest:
-            return True
-        if "语音" in rest or "发" in rest:
-            return True
-        if voice_keys:
-            rest_norm = _normalize_for_match(rest)
-            if rest_norm and any(rest_norm in _normalize_for_match(k) for k in voice_keys):
-                return True
-            if _fuzzy_suggest(rest, list(voice_keys), limit=3):
-                return True
-        return False
-    if "随机" in t and ("语音" in t or "发" in t):
-        return True
-    if re.match(r"^(?:发送|发)\s*.+$", t):
-        return True
-    if "#voice" in t.lower():
-        return True
-    if "语音" in t:
-        return True
-    return False
-
-def _allowed_llm_tools_for_text(text: str, voice_keys: Optional[List[str]] = None) -> Set[str]:
+def _llm_allowed_tools_for_text(text: str, voice_keys: Optional[List[str]] = None, select_mode: str = "list") -> Set[str]:
     t = (text or "").strip()
     if not t:
         return set()
@@ -122,8 +91,17 @@ def _allowed_llm_tools_for_text(text: str, voice_keys: Optional[List[str]] = Non
     if t in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个", "再发一次"}:
         return {"airi_send_random_voice"}
     if t.startswith("随机"):
-        if _is_voice_intent(t, voice_keys):
+        rest = t[2:].strip()
+        if not rest:
             return {"airi_send_random_voice"}
+        if "语音" in rest or "发" in rest:
+            return {"airi_send_random_voice"}
+        if voice_keys:
+            rest_norm = _normalize_for_match(rest)
+            if rest_norm and any(rest_norm in _normalize_for_match(k) for k in voice_keys):
+                return {"airi_send_random_voice"}
+            if _fuzzy_suggest(rest, list(voice_keys), limit=3):
+                return {"airi_send_random_voice"}
         return set()
     if "随机" in t and ("语音" in t or "发" in t):
         return {"airi_send_random_voice"}
@@ -133,7 +111,11 @@ def _allowed_llm_tools_for_text(text: str, voice_keys: Optional[List[str]] = Non
         return {"airi_list_all_voices"}
     if any(k in t for k in ("搜索语音", "查语音", "查找语音", "语音搜索")):
         return {"airi_search_voices"}
-    return _LLM_TOOL_NAMES.copy()
+    if "#voice" in t.lower() or "语音" in t:
+        if select_mode == "list":
+            return {"airi_list_all_voices", "airi_search_voices"}
+        return _LLM_TOOL_NAMES.copy()
+    return set()
 
 def _extract_tool_name(item: Any) -> Optional[str]:
     if isinstance(item, dict):
@@ -707,10 +689,7 @@ class AiriVoice(Star):
             return
         text = (event.message_str or "").strip()
         voice_keys = list(self.voice_map.keys())
-        if not _is_voice_intent(text, voice_keys):
-            _filter_req_tools(req, set())
-            return
-        allow = _allowed_llm_tools_for_text(text, voice_keys)
+        allow = _llm_allowed_tools_for_text(text, voice_keys, getattr(self, "llm_select_mode", "list"))
         _filter_req_tools(req, allow)
 
         if self.auto_reply_voice_enabled:
@@ -1376,124 +1355,6 @@ class AiriVoice(Star):
         """处理普通文本触发、随机语音和前缀模式。"""
         # LLM 模式下由大模型工具调用处理，此处不做任何关键词匹配，避免与工具流冲突
         if self.trigger_mode == "llm":
-            text = (event.message_str or "").strip()
-            if not text:
-                return
-            if text in {"再来", "再来一次", "再来一条", "再来条", "再来一个", "再来个", "再发一次"} and self.voice_map:
-                name = random.choice(list(self.voice_map.keys()))
-                matched_path = self.voice_map.get(name)
-                if matched_path:
-                    try:
-                        yield event.chain_result([Record.fromFileSystem(matched_path)])
-                        setattr(event, "__airi_voice_sent_by_tool__", True)
-                        if hasattr(event, "should_call_llm"):
-                            event.should_call_llm(False)
-                    except Exception as e:
-                        logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
-                        yield event.plain_result("语音发送失败")
-                return
-            if "随机" in text and ("语音" in text or "发" in text) and self.voice_map:
-                name = random.choice(list(self.voice_map.keys()))
-                matched_path = self.voice_map.get(name)
-                if matched_path:
-                    try:
-                        yield event.chain_result([Record.fromFileSystem(matched_path)])
-                        setattr(event, "__airi_voice_sent_by_tool__", True)
-                        if hasattr(event, "should_call_llm"):
-                            event.should_call_llm(False)
-                    except Exception as e:
-                        logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
-                        yield event.plain_result("语音发送失败")
-                return
-            if text.startswith("随机") and self.voice_map:
-                if text in {"随机发条语音", "随机语音"}:
-                    name = random.choice(list(self.voice_map.keys()))
-                    matched_path = self.voice_map.get(name)
-                    if matched_path:
-                        try:
-                            yield event.chain_result([Record.fromFileSystem(matched_path)])
-                            setattr(event, "__airi_voice_sent_by_tool__", True)
-                            if hasattr(event, "should_call_llm"):
-                                event.should_call_llm(False)
-                        except Exception as e:
-                            logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
-                            yield event.plain_result("语音发送失败")
-                    return
-
-                m = re.match(r"^随机\s*(.+)$", text)
-                if m:
-                    kw = m.group(1).strip()
-                    if any(x in kw for x in _VOICE_QUESTION_MARKERS):
-                        return
-                    candidates = [n for n in self.voice_map.keys() if kw in n]
-                    if not candidates:
-                        kw_norm = _normalize_for_match(kw)
-                        if kw_norm:
-                            candidates = [n for n in self.voice_map.keys() if kw_norm in _normalize_for_match(n)]
-                    if not candidates:
-                        suggestions = _fuzzy_suggest(kw, list(self.voice_map.keys()), limit=3)
-                        if len(suggestions) == 1:
-                            candidates = suggestions
-                        else:
-                            if suggestions:
-                                yield event.plain_result("找到多个相似语音：" + "、".join(suggestions) + "，请发送更精确的指令")
-                                if hasattr(event, "should_call_llm"):
-                                    event.should_call_llm(False)
-                            return
-                    name = random.choice(candidates)
-                    matched_path = self.voice_map.get(name)
-                    if matched_path:
-                        try:
-                            yield event.chain_result([Record.fromFileSystem(matched_path)])
-                            setattr(event, "__airi_voice_sent_by_tool__", True)
-                            if hasattr(event, "should_call_llm"):
-                                event.should_call_llm(False)
-                        except Exception as e:
-                            logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
-                            yield event.plain_result("语音发送失败")
-                    return
-
-            m = re.match(r"^(?:发送|发)\s*(.+)$", text)
-            if not m:
-                return
-            raw = m.group(1).strip()
-            parts = [p.strip() for p in re.split(r"[、,，\s]+|和|与|以及", raw) if p.strip()]
-            if not parts:
-                return
-            any_sent = False
-            unresolved = []
-            for p in parts:
-                resolved_name, suggestions = _resolve_voice_name(p, self.voice_map)
-                auto_corrected = False
-                if not resolved_name:
-                    if len(suggestions) == 1:
-                        resolved_name = suggestions[0]
-                        auto_corrected = True
-                    else:
-                        if suggestions:
-                            unresolved.append(f"{p} -> " + " / ".join(suggestions))
-                        else:
-                            unresolved.append(p)
-                        continue
-                path = self.voice_map.get(resolved_name)
-                if not path:
-                    unresolved.append(p)
-                    continue
-                try:
-                    yield event.chain_result([Record.fromFileSystem(path)])
-                    any_sent = True
-                except Exception as e:
-                    logger.error(f"[AiriVoice] 发送失败 '{resolved_name}': {e}")
-                    unresolved.append(p)
-                    continue
-                if auto_corrected:
-                    pass
-            if unresolved:
-                yield event.plain_result("以下语音未找到或发送失败：\n" + "\n".join(unresolved))
-            if any_sent:
-                setattr(event, "__airi_voice_sent_by_tool__", True)
-            if hasattr(event, "should_call_llm"):
-                event.should_call_llm(False)
             return
         text = (event.message_str or "").strip()
         if not text:
