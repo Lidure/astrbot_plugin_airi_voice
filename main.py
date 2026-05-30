@@ -18,6 +18,11 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 
+try:
+    from astrbot.api.provider import ProviderRequest
+except Exception:
+    ProviderRequest = Any
+
 ALLOWED_EXT = {".mp3", ".wav", ".ogg", ".silk", ".amr"}
 PAGE_SIZE = 15
 IMAGE_PAGE_SIZE = 42          # 图片模式每页显示数量
@@ -38,6 +43,72 @@ def _tool_err(code: str, message: str, meta: Optional[dict] = None) -> str:
     if meta:
         payload["error"]["meta"] = meta
     return _tool_json(payload)
+
+_LLM_TOOL_NAMES = {
+    "airi_list_all_voices",
+    "airi_search_voices",
+    "airi_send_voice",
+    "airi_send_random_voice",
+    "airi_send_voices",
+}
+
+def _is_voice_intent(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    if t.startswith("随机"):
+        return True
+    if re.match(r"^(?:发送|发)\s*.+$", t):
+        return True
+    if "#voice" in t.lower():
+        return True
+    if "语音" in t:
+        return True
+    return False
+
+def _allowed_llm_tools_for_text(text: str) -> Set[str]:
+    t = (text or "").strip()
+    if not t:
+        return set()
+    if t.startswith("随机"):
+        return {"airi_send_random_voice"}
+    if re.match(r"^(?:发送|发)\s*.+$", t):
+        return {"airi_send_voices", "airi_send_voice"}
+    if any(k in t for k in ("语音列表", "全部语音", "有哪些语音", "有哪些语音包", "有哪些语音呢", "语音有哪些")):
+        return {"airi_list_all_voices"}
+    if any(k in t for k in ("搜索语音", "查语音", "查找语音", "语音搜索")):
+        return {"airi_search_voices"}
+    return _LLM_TOOL_NAMES.copy()
+
+def _extract_tool_name(item: Any) -> Optional[str]:
+    if isinstance(item, dict):
+        fn = item.get("function")
+        if isinstance(fn, dict):
+            n = fn.get("name")
+            return str(n) if n else None
+        n = item.get("name")
+        return str(n) if n else None
+    n = getattr(item, "name", None)
+    return str(n) if n else None
+
+def _filter_req_tools(req: Any, allow: Set[str]) -> None:
+    for attr in ("tools", "tool_list", "openai_tools", "function_tools"):
+        tools = getattr(req, attr, None)
+        if not isinstance(tools, list):
+            continue
+        kept = []
+        for it in tools:
+            n = _extract_tool_name(it)
+            if n is None:
+                kept.append(it)
+                continue
+            if n in _LLM_TOOL_NAMES and n not in allow:
+                continue
+            kept.append(it)
+        try:
+            setattr(req, attr, kept)
+        except Exception:
+            pass
 
 def _normalize_for_match(text: str) -> str:
     if text is None:
@@ -116,19 +187,19 @@ async def _send_message_with_retry(agent_ctx: Any, origin: Any, chain: MessageCh
 class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
     """列出当前插件中所有可用的语音名称。"""
     name: str = "airi_list_all_voices"
-    description: str = "列出本插件加载的全部语音名称，供 LLM 选择使用。"
+    description: str = "列出语音名称。"
     parameters: dict = Field(
         default_factory=lambda: {
             "type": "object",
             "properties": {
                 "page": {
                     "type": "integer",
-                    "description": "页码（从 1 开始）。",
+                    "description": "页码",
                     "default": 1,
                 },
                 "page_size": {
                     "type": "integer",
-                    "description": "每页数量（1-100）。",
+                    "description": "每页数量",
                     "default": 30,
                 },
             },
@@ -177,23 +248,23 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
 class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
     """根据关键词筛选语音名称。"""
     name: str = "airi_search_voices"
-    description: str = "根据用户给出的关键词，在本插件的语音库中筛选匹配的语音名称。"
+    description: str = "搜索语音名称。"
     parameters: dict = Field(
         default_factory=lambda: {
             "type": "object",
             "properties": {
                 "keyword": {
                     "type": "string",
-                    "description": "用户给出的语音关键词，用于模糊匹配语音名称。",
+                    "description": "关键词",
                 },
                 "page": {
                     "type": "integer",
-                    "description": "页码（从 1 开始）。",
+                    "description": "页码",
                     "default": 1,
                 },
                 "page_size": {
                     "type": "integer",
-                    "description": "每页数量（1-100）。",
+                    "description": "每页数量",
                     "default": 30,
                 },
             },
@@ -262,14 +333,14 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
 class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
     """根据指定名称直接向当前会话发送语音。"""
     name: str = "airi_send_voice"
-    description: str = "根据指定的语音名称，直接向当前会话发送对应的语音消息。"
+    description: str = "发送一条语音。"
     parameters: dict = Field(
         default_factory=lambda: {
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "要发送的语音名称，必须是已存在的语音列表中的一个。",
+                    "description": "语音名称",
                 }
             },
             "required": ["name"],
@@ -331,14 +402,14 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
 class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
     """随机发送一条语音（可选按关键词过滤）。"""
     name: str = "airi_send_random_voice"
-    description: str = "随机发送一条语音到当前会话。可选 keyword 用于过滤候选语音名称。"
+    description: str = "随机发送一条语音。"
     parameters: dict = Field(
         default_factory=lambda: {
             "type": "object",
             "properties": {
                 "keyword": {
                     "type": "string",
-                    "description": "可选：仅在语音名称中包含该关键词的候选里随机选择。",
+                    "description": "可选关键词",
                 }
             },
             "required": [],
@@ -395,7 +466,7 @@ class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
 class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
     """批量发送语音（按顺序）。"""
     name: str = "airi_send_voices"
-    description: str = "按顺序发送多条语音。每条都会进行名称纠错与发送重试。"
+    description: str = "批量发送语音。"
     parameters: dict = Field(
         default_factory=lambda: {
             "type": "object",
@@ -403,7 +474,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
                 "names": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "要发送的语音名称列表。",
+                    "description": "语音名称列表",
                 }
             },
             "required": ["names"],
@@ -520,6 +591,10 @@ class AiriVoice(Star):
             logger.warning(f"[AiriVoice] 无效 llm_select_mode，强制使用 list")
             self.llm_select_mode = "list"
 
+        self.llm_tools_inject_mode = self.config.get("llm_tools_inject_mode", "always")
+        if self.llm_tools_inject_mode not in {"always", "on_demand"}:
+            self.llm_tools_inject_mode = "always"
+
         self.auto_reply_voice_enabled = self.config.get("auto_reply_voice_on_bot_message", False)
         self.list_as_image = self.config.get("list_as_image", False)   # ← 新增
 
@@ -545,6 +620,19 @@ class AiriVoice(Star):
                 logger.info(f"[AiriVoice] 已为 LLM 注册 {len(llm_tools)} 个语音工具，模式：{self.llm_select_mode}")
             except Exception as e:
                 logger.error(f"[AiriVoice] 注册 LLM 工具失败：{e}")
+
+    @filter.on_llm_request()
+    async def on_llm_request_filter_tools(self, event: AstrMessageEvent, req: ProviderRequest):
+        if self.trigger_mode != "llm":
+            return
+        if getattr(self, "llm_tools_inject_mode", "always") != "on_demand":
+            return
+        text = (event.message_str or "").strip()
+        if not _is_voice_intent(text):
+            _filter_req_tools(req, set())
+            return
+        allow = _allowed_llm_tools_for_text(text)
+        _filter_req_tools(req, allow)
 
         if self.auto_reply_voice_enabled:
             logger.info("[AiriVoice] 已启用 bot 回复自动追加语音功能")

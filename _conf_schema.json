@@ -49,5 +49,12 @@
     "hint": "list/keyword 为 LLM 选择语音的偏好策略提示。插件仍会同时提供 list/search/random/send 工具，LLM 可按需调用。",
     "default": "list",
     "options": ["list", "keyword"]
+  },
+  "llm_tools_inject_mode": {
+    "description": "LLM 工具注入策略",
+    "type": "string",
+    "hint": "always: 每次对话都注入语音工具（更稳定但更耗 token）；on_demand: 仅当用户消息像“发语音/随机/语音列表”等请求时注入，可显著降低输入 token",
+    "default": "always",
+    "options": ["always", "on_demand"]
   }
 }
