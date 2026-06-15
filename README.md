@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.5-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.6-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -37,6 +37,9 @@
    - 音频蛋没能量，可以直接F12爬取音频
 
    https://www.tosound.com/
+- 日语tts生成（效果一般般）
+  
+  https://airvoz.com/zh/text-to-speech/japanese
 
 - 日语素材（⭐推荐） 需要魔法
 
@@ -203,7 +206,7 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 - **框架支持**: 感谢 [AstrBot](https://github.com/Soulter/AstrBot) 提供强大且灵活的插件架构。
 - **灵感来源**: 致力于让每一个机器人都拥有独特的声音。
-- **好心帮助**：非常感谢[茶冰](https://github.com/ChaBingovo)对该插件的完善和改进！
+- **热心帮助**：非常感谢[茶冰](https://github.com/ChaBingovo)对该插件的完善和改进！
 
 ### 🐛 问题反馈
 遇到 Bug？有新点子？或者想分享你制作的语音包？
