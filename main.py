@@ -1389,6 +1389,11 @@ class AiriVoice(Star):
         text = (event.message_str or "").strip()
         if not text:
             return
+
+        # AstrBot 的命令解析可能会把用户输入的首个 / 从 message_str 中移除。
+        # 优先使用原始消息判断前缀，避免用户必须发送 //随机...。
+        raw_text = getattr(getattr(event, "message_obj", None), "raw_message", None)
+        raw_text = raw_text.strip() if isinstance(raw_text, str) else None
         current_pool_len = len(self.config.get("extra_voice_pool", []))
         if current_pool_len > self.last_pool_len:
             logger.info("[AiriVoice] 检测到网页配置变化，自动刷新语音列表")
@@ -1398,7 +1403,12 @@ class AiriVoice(Star):
 
         # 随机语音有独立的处理逻辑，必须在处理前完成前缀校验。
         if self.enable_prefix:
-            if text.startswith("随机"):
+            has_random_prefix = (
+                bool(re.match(r"^/(?!/)随机", raw_text))
+                if raw_text is not None
+                else text.startswith("/随机")
+            )
+            if not has_random_prefix:
                 return
             if text.startswith("/随机"):
                 text = text[1:].strip()
