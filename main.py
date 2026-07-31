@@ -1471,7 +1471,6 @@ class AiriVoice(Star):
                 logger.error(f"[AiriVoice] 发送失败 '{keyword}': {e}")
                 yield event.plain_result("语音发送失败")
 
-    @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.command("随机")
     async def random_command(self, event: AstrMessageEvent, keyword: str = ""):
         """处理 /随机 命令；仅当前缀开关开启时启用。"""
@@ -1514,6 +1513,28 @@ class AiriVoice(Star):
             return
         matched_path = self.voice_map[random.choice(candidates)]
         yield event.chain_result([Record.fromFileSystem(matched_path)])
+
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def random_prefix_listener(self, event: AstrMessageEvent):
+        """接收无空格的 /随机关键词形式。"""
+        if not self.enable_prefix:
+            return
+
+        raw_text = getattr(getattr(event, "message_obj", None), "raw_message", None)
+        raw_text = raw_text.strip() if isinstance(raw_text, str) else None
+        if raw_text is not None:
+            if not re.match(r"^/(?!/)随机(?!\s)", raw_text):
+                return
+        else:
+            # 部分适配器不提供 raw_message；此时单个 / 已由 AstrBot 消息解析移除。
+            text = (event.message_str or "").strip()
+            if text.startswith("/") or not getattr(event, "is_at_or_wake_command", False):
+                return
+            if not text.startswith("随机"):
+                return
+
+        async for result in self.random_command(event):
+            yield result
 
     @filter.command("voice.add")
     async def voice_add(self, event: AstrMessageEvent, name: str):
