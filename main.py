@@ -1410,7 +1410,10 @@ class AiriVoice(Star):
             )
             if not has_random_prefix:
                 return
-            if text.startswith("/随机"):
+            if raw_text is not None:
+                # message_str 可能已经被命令解析去掉首个 /，因此用原始消息恢复关键词。
+                text = raw_text[1:].strip()
+            elif text.startswith("/随机"):
                 text = text[1:].strip()
 
         # 随机语音处理...
