@@ -2,9 +2,9 @@
   "trigger_mode": {
     "description": "触发模式",
     "type": "string",
-    "hint": "prefix: 必须用 #voice 前缀；direct: 直接输入关键词",
+    "hint": "direct: 直接输入关键词；prefix: 必须用 #voice 前缀；llm: 仅注册 LLM 工具，由大模型调用语音功能",
     "default": "direct",
-    "options": ["direct", "prefix"]
+    "options": ["direct", "prefix", "llm"]
   },
   "enable_prefix": {
     "description": "随机关键词启用 / 前缀",
@@ -25,10 +25,48 @@
     "hint": "每行一个用户 ID 或昵称，仅当 admin_mode 为 whitelist 时生效",
     "default": ""
   },
+  "list_as_image": {
+    "description": "语音列表是否以图片形式显示",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，/voice.list 将生成图片形式展示语音列表（更清晰美观，推荐开启）"
+  },
   "extra_voice_pool": {
     "description": "额外语音文件池（网页上传）",
     "hint": "上传 mp3/wav 等文件，文件名（去后缀）作为触发关键词。支持多文件上传。",
     "type": "file",
     "default": []
+  },
+  "auto_reply_voice_on_bot_message": {
+    "description": "当 bot 自己发消息时，自动检测关键词并发语音",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后，bot 回复的文本只要包含任意语音关键词，就会自动追加对应语音（推荐开启防刷屏）"
+  },
+  "auto_reply_voice_in_llm": {
+    "description": "LLM 模式下允许 bot 回复自动追加语音",
+    "type": "bool",
+    "default": false,
+    "hint": "默认关闭：LLM 模式建议仅由 LLM 工具决定是否发语音，避免文本命中关键词导致非预期追加"
+  },
+  "llm_select_mode": {
+    "description": "LLM 语音选择模式",
+    "type": "string",
+    "hint": "list/keyword 为 LLM 选择语音的偏好策略提示。插件仍会同时提供 list/search/random/send 工具，LLM 可按需调用。",
+    "default": "list",
+    "options": ["list", "keyword"]
+  },
+  "llm_tools_inject_mode": {
+    "description": "LLM 工具注入策略",
+    "type": "string",
+    "hint": "always: 每次对话都注入语音工具，由模型自行判断是否调用；on_demand: 仅当命中“发/发送/随机/语音列表/搜索语音”等语音意图时才注入工具，可显著降低输入 token",
+    "default": "always",
+    "options": ["always", "on_demand"]
+  },
+  "llm_max_voices_per_request": {
+    "description": "LLM 单次语音发送上限",
+    "type": "int",
+    "default": 2,
+    "hint": "限制一次 LLM 工具调用链路中最多发送的语音条数（防刷屏/限速）。设为 0 表示不限制。"
   }
 }

@@ -8,7 +8,11 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.6-orange?style=for-the-badge)]()
+
+<a href="https://count.getloli.com" target="_blank">
+	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
+</a>
 
 </div>
 
@@ -23,12 +27,39 @@
 | ⚡ **热加载机制** | 网页上传新语音后自动识别，无需重启机器人 |
 | 🛡️ **智能防刷屏** | 内置分页列表命令，再多语音也不怕消息爆炸 |
 | 🔐 **权限精细控制** | 支持白名单/管理员模式，防止语音功能被滥用 |
-| 🎛️ **双触发模式** | 灵活切换「直接模式」与「前缀模式」，适应不同群聊环境 |
+| 🎛️ **多触发模式** | 灵活切换「直接模式」「前缀模式」「LLM 模式」，适应不同场景 |
+| 🤖 **LLM 智能联动** | 在 LLM 模式下，由大模型自动选择并发送最合适的语音 |
 | 🆕 **引用添加语音** | 聊天中引用语音消息，一条命令即可添加新语音 |
+
+# 推荐的音频素材网站：
+
+- 淘声网
+   - 音频蛋没能量，可以直接F12爬取音频
+
+   https://www.tosound.com/
+- 日语tts生成（效果一般般）
+  
+  https://airvoz.com/zh/text-to-speech/japanese
+
+- 日语素材（⭐推荐） 需要魔法
+
+   https://amitaro.net/voice/voice_dl/
+  
+- PJSK语音素材（⭐⭐推荐）
+
+  需要通过F12的网络爬取下载
+  
+  https://snowyviewer.exmeaning.com/story/self/
+
+# 推荐的音频在线编辑网站：
+
+https://vocalremover.org/zh/cutter
 
 ---
 
 ## 🎮 使用指南
+输入/voice.help获取说明：
+<img width="1360" height="1220" alt="ea24bd41e4f7faf17f42d6a6c75599d6" src="https://github.com/user-attachments/assets/4a662bfe-347a-4c95-81d5-f2634f85554e" />
 
 ### 1. 触发语音
 配置好语音文件后，只需在聊天框输入对应的**关键词**即可。
@@ -44,6 +75,7 @@
 输入 `/voice.list` 查看所有可用的语音关键词。
 *   支持分页查看：`/voice.list 2`
 *   自动统计总数与页码，清晰易读。
+<img width="1360" height="2318" alt="64bebc3362e9a3729979a3f9a0459cfe" src="https://github.com/user-attachments/assets/4d0708dc-aae4-4693-933c-e97727ab6dff" />
 
 ### 3. 触发模式切换
 在插件配置页面可调整触发逻辑，避免日常聊天误触：
@@ -52,6 +84,12 @@
 | :--- | :--- | :--- |
 | **Direct (直接模式)** 👈 *默认* | 直接发送关键词即可触发 | 亲友群、专用频道 |
 | **Prefix (前缀模式)** | 必须发送 `#voice 关键词` 才触发 | 大群、公共频道，防止误触 |
+| **LLM 模式** | 仅在需要由大模型自动选择并发送语音时启用，会为当前会话注册 `airi_*` LLM 工具 | 与 Agent 对话、需要“智能选语音”的场景 |
+
+> ⚠️ 未选择 LLM 模式时，插件只作为普通语音关键词插件工作，大模型不会看到 `airi_*` 工具。
+
+### 4. bot追加语音
+bot 回复的文本只要包含任意语音关键词，就会自动追加对应语音
 
 如果只想为“随机”关键词增加 `/` 前缀，可在插件配置中开启 `enable_prefix`。开启后发送
 `/随机...` 才会触发，直接发送 `随机...` 不会触发；其他关键词不受影响。该选项默认关闭。
@@ -97,6 +135,8 @@
 > 2. 你引用这条语音，发送：`/voice.add 早上好`
 > 3. 以后任何人发送 `早上好`，Airi 都会回复同样的语音！
 
+> 💡 如果引用的是 QQ 的 `.silk` 语音，插件会尝试先用 `silk/decoder` 解码成 PCM，再交给 `ffmpeg` 转成无损 `WAV` 保存。你也可以在插件配置里填写 `silk_decoder_path`。
+
 > ⚠️ **注意：** 此命令需要管理员权限
 
 ### 🅲 方式三：本地部署
@@ -120,6 +160,7 @@
 | 命令 | 权限 | 说明 |
 | :--- | :---: | :--- |
 | `[关键词]` | 全员 | 直接输入关键词发送对应语音 |
+| `/随机语音` | 全员 | 随机发送一条语音 |
 | `#voice [关键词]` | 全员 | 前缀模式下触发语音 |
 | `/voice.list [页码]` | 全员 | 查看可用语音列表（支持分页） |
 | `/voice.help` | 全员 | 显示帮助信息与当前模式 |
@@ -168,6 +209,7 @@
 
 - **框架支持**: 感谢 [AstrBot](https://github.com/Soulter/AstrBot) 提供强大且灵活的插件架构。
 - **灵感来源**: 致力于让每一个机器人都拥有独特的声音。
+- **热心帮助**：非常感谢[茶冰](https://github.com/ChaBingovo)对该插件的完善和改进！
 
 ### 🐛 问题反馈
 遇到 Bug？有新点子？或者想分享你制作的语音包？
@@ -178,7 +220,7 @@
 <div align="center">
 
 **Made with 💕 by [lidure](https://github.com/Lidure)**  
-📅 最后更新：2026.03  
+📅 最后更新：2026.06  
 📜 遵循 MIT 协议开源
 
 </div>
