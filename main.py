@@ -41,6 +41,10 @@ class AiriVoice(Star):
         if self.trigger_mode not in {"prefix", "direct"}:
             logger.warning(f"[AiriVoice] 无效 trigger_mode，强制使用 direct")
             self.trigger_mode = "direct"
+
+        # “随机”关键词的前缀开关。默认关闭，避免改变其他语音关键词的触发行为。
+        # 开启后仅使用 /随机... 触发随机相关语音，例如：/随机语音。
+        self.enable_prefix = bool(self.config.get("enable_prefix", False))
         
         # 权限控制
         self.admin_mode = self.config.get("admin_mode", "whitelist")
@@ -280,7 +284,11 @@ class AiriVoice(Star):
 
         # 获取关键词
         keyword = text
-        if self.trigger_mode == "prefix":
+        if self.enable_prefix and text.startswith("随机"):
+            return
+        if self.enable_prefix and text.startswith("/随机"):
+            keyword = text[1:].strip()
+        elif self.trigger_mode == "prefix":
             match = re.search(r"^#voice\s+(.+)", text, re.I)
             if not match:
                 return
@@ -458,6 +466,7 @@ class AiriVoice(Star):
 【触发模式】
 🔹 direct: 直接输入关键词触发
 🔹 prefix: 使用 #voice 关键词 触发
+🔹 enable_prefix: 开启后仅随机关键词使用 /随机... 触发（默认关闭）
 
 【命令】
 {chr(10).join(commands)}"""

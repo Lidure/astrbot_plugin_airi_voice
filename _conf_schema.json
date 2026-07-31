@@ -6,6 +6,12 @@
     "default": "direct",
     "options": ["direct", "prefix"]
   },
+  "enable_prefix": {
+    "description": "随机关键词启用 / 前缀",
+    "type": "boolean",
+    "hint": "开启后仅以“随机”开头的关键词必须使用 /随机... 才能触发，其他关键词不受影响。默认关闭",
+    "default": false
+  },
   "admin_mode": {
     "description": "管理命令权限模式",
     "type": "string",
