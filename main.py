@@ -1471,15 +1471,26 @@ class AiriVoice(Star):
                 logger.error(f"[AiriVoice] 发送失败 '{keyword}': {e}")
                 yield event.plain_result("语音发送失败")
 
+    @filter.event_message_type(filter.EventMessageType.ALL)
     @filter.command("随机")
     async def random_command(self, event: AstrMessageEvent, keyword: str = ""):
         """处理 /随机 命令；仅当前缀开关开启时启用。"""
         if not self.enable_prefix:
             return
 
-        text = (event.message_str or "").strip()
-        if text.startswith("/"):
-            text = text[1:].strip()
+        raw_text = getattr(getattr(event, "message_obj", None), "raw_message", None)
+        raw_text = raw_text.strip() if isinstance(raw_text, str) else None
+        if raw_text is not None:
+            # 只接受单个 /，避免 //随机关键词绕过前缀限制。
+            if not re.match(r"^/(?!/)随机(?!\s)", raw_text):
+                return
+            text = raw_text[1:].strip()
+        else:
+            text = (event.message_str or "").strip()
+            if text.startswith("/"):
+                text = text[1:].strip()
+            if not text.startswith("随机"):
+                return
         if text == "随机" and keyword:
             text = f"随机 {keyword.strip()}"
         if not text.startswith("随机"):
