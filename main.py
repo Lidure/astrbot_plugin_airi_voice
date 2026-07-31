@@ -630,7 +630,16 @@ class AiriVoice(Star):
 
         # “随机”关键词的前缀开关。默认关闭，避免改变其他语音关键词的触发行为。
         # 开启后仅使用 /随机... 触发随机相关语音，例如：/随机语音。
-        self.enable_prefix = bool(self.config.get("enable_prefix", False))
+        # 兼容早期误写的 enble_prefix 配置名，正式配置名仍为 enable_prefix。
+        prefix_value = self.config.get("enable_prefix")
+        if prefix_value is None:
+            prefix_value = self.config.get("enble_prefix", False)
+        if isinstance(prefix_value, str):
+            self.enable_prefix = prefix_value.strip().lower() in {
+                "true", "1", "yes", "on", "是", "开启"
+            }
+        else:
+            self.enable_prefix = bool(prefix_value)
         
         # 权限控制
         self.admin_mode = self.config.get("admin_mode", "whitelist")
@@ -1387,6 +1396,13 @@ class AiriVoice(Star):
             self._update_sorted_keys()
             self.last_pool_len = current_pool_len
 
+        # 随机语音有独立的处理逻辑，必须在处理前完成前缀校验。
+        if self.enable_prefix:
+            if text.startswith("随机"):
+                return
+            if text.startswith("/随机"):
+                text = text[1:].strip()
+
         # 随机语音处理...
         if text.startswith("随机") and self.voice_map:
             if text in {"随机发条语音", "随机语音"}:
@@ -1422,11 +1438,7 @@ class AiriVoice(Star):
 
         # 普通关键词处理...
         keyword = text
-        if self.enable_prefix and text.startswith("随机"):
-            return
-        if self.enable_prefix and text.startswith("/随机"):
-            keyword = text[1:].strip()
-        elif self.trigger_mode == "prefix":
+        if self.trigger_mode == "prefix":
             match = re.search(r"^#voice\s+(.+)", text, re.I)
             if not match:
                 return
