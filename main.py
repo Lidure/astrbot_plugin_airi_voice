@@ -604,7 +604,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
     "airi_voice",
     "lidure",
     "输入关键词发送对应语音",
-    "2.4",
+    "2.7",
     "https://github.com/Lidure/astrbot_plugin_airi_voice",
 )
 class AiriVoice(Star):
@@ -1403,17 +1403,19 @@ class AiriVoice(Star):
 
         # 随机语音有独立的处理逻辑，必须在处理前完成前缀校验。
         if self.enable_prefix:
+            # “随机语音”是独立关键词，允许不带前缀直接触发全局随机语音。
+            direct_random_keyword = text == "随机语音" or raw_text == "随机语音"
             has_random_prefix = (
                 bool(re.match(r"^/(?!/)随机", raw_text))
                 if raw_text is not None
                 else text.startswith("/随机")
             )
-            if not has_random_prefix:
+            if not direct_random_keyword and not has_random_prefix:
                 return
-            if raw_text is not None:
+            if has_random_prefix and raw_text is not None:
                 # message_str 可能已经被命令解析去掉首个 /，因此用原始消息恢复关键词。
                 text = raw_text[1:].strip()
-            elif text.startswith("/随机"):
+            elif has_random_prefix and text.startswith("/随机"):
                 text = text[1:].strip()
 
         # 随机语音处理...
@@ -1468,6 +1470,39 @@ class AiriVoice(Star):
             except Exception as e:
                 logger.error(f"[AiriVoice] 发送失败 '{keyword}': {e}")
                 yield event.plain_result("语音发送失败")
+
+    @filter.command("随机")
+    async def random_command(self, event: AstrMessageEvent, keyword: str = ""):
+        """处理 /随机 命令；仅当前缀开关开启时启用。"""
+        if not self.enable_prefix:
+            return
+
+        text = (event.message_str or "").strip()
+        if text.startswith("/"):
+            text = text[1:].strip()
+        if text == "随机" and keyword:
+            text = f"随机 {keyword.strip()}"
+        if not text.startswith("随机"):
+            text = f"随机 {keyword}".strip()
+
+        if not self.voice_map:
+            return
+        if text in {"随机", "随机语音", "随机发条语音"}:
+            name = random.choice(list(self.voice_map.keys()))
+            matched_path = self.voice_map.get(name)
+            if matched_path:
+                yield event.chain_result([Record.fromFileSystem(matched_path)])
+            return
+
+        match = re.match(r"^随机\s*(.+)$", text)
+        if not match:
+            return
+        candidates = [name for name in self.voice_map if match.group(1).strip() in name]
+        if not candidates:
+            yield event.plain_result(f"未找到包含「{match.group(1).strip()}」的语音")
+            return
+        matched_path = self.voice_map[random.choice(candidates)]
+        yield event.chain_result([Record.fromFileSystem(matched_path)])
 
     @filter.command("voice.add")
     async def voice_add(self, event: AstrMessageEvent, name: str):

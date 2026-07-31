@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.6-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.7-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -92,7 +92,7 @@ https://vocalremover.org/zh/cutter
 bot 回复的文本只要包含任意语音关键词，就会自动追加对应语音
 
 如果只想为“随机”关键词增加 `/` 前缀，可在插件配置中开启 `enable_prefix`。开启后发送
-`/随机...` 才会触发，直接发送 `随机...` 不会触发；其他关键词不受影响。该选项默认关闭。
+`/随机...` 才会触发，固定关键词 `随机语音` 仍可直接触发；其他关键词不受影响。该选项默认关闭。
 
 ---
 
