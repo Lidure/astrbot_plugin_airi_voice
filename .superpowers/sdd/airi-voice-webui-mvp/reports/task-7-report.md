@@ -14,7 +14,7 @@ Follow-up corrections preserve historical `.silk` / `.amr` upload support, add `
 
 - `python -m py_compile main.py web_api.py voice_catalog.py request_parser.py`: passed.
 - `python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"`: passed.
-- `pytest -q`: 42 passed in 0.43s.
+- `pytest -q`: 46 passed in 0.54s.
 - `git diff --check`: passed.
 
 ## Release disposition

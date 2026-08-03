@@ -15,7 +15,7 @@ Date: 2026-08-03
 | --- | --- | --- |
 | Python compilation | PASS | `python -m py_compile main.py web_api.py voice_catalog.py request_parser.py` exited 0. |
 | Configuration JSON | PASS | `python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"` exited 0. |
-| Full automated test suite | PASS | `pytest -q`: 42 passed in 0.43s. |
+| Full automated test suite | PASS | `pytest -q`: 46 passed in 0.54s. |
 | Whitespace errors | PASS | `git diff --check` exited 0. |
 
 ## Fixtures available in this environment
