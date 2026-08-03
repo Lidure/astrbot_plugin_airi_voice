@@ -192,7 +192,12 @@
     showError(null);
     try {
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
-      const payload = await readResponse(response);
+      let payload = await readResponse(response);
+      // AstrBot bridge versions differ: some unwrap {status: "ok", data},
+      // while others return the JSON body directly.
+      if (payload && payload.status === "ok" && payload.data && typeof payload.data === "object") {
+        payload = payload.data;
+      }
       if (!payload || typeof payload.data !== "string") throw new Error("音频数据无效");
       const binary = atob(payload.data);
       const bytes = new Uint8Array(binary.length);
