@@ -20,6 +20,8 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 from web_api import register_web_features
+from request_parser import parse_request
+from voice_catalog import CatalogError, VoiceCatalog
 
 try:
     from astrbot.api.provider import ProviderRequest
@@ -679,12 +681,9 @@ class AiriVoice(Star):
         self.voice_map: Dict[str, str] = {}
         self.sorted_keys: List[str] = []
 
-        self._load_local_voices()
-        self._load_user_added_voices()
-        self._load_web_voices(self.config)
-        self._update_sorted_keys()
-
-        self.last_pool_len = len(self.config.get("extra_voice_pool", []))
+        self.catalog = VoiceCatalog(self.voice_dir, self.data_dir, self._configured_extra_voice_pool())
+        self._sync_catalog_state()
+        self.last_extra_voice_pool = self._configured_extra_voice_pool()
         self.web_features = register_web_features(self.context, self)
 
         if self.trigger_mode == "llm":
@@ -802,6 +801,16 @@ class AiriVoice(Star):
 
     def _update_sorted_keys(self):
         self.sorted_keys = sorted(self.voice_map.keys())
+
+    def _configured_extra_voice_pool(self) -> tuple[str, ...]:
+        pool = self.config.get("extra_voice_pool", [])
+        if not isinstance(pool, (list, tuple)):
+            return ()
+        return tuple(item for item in pool if isinstance(item, str))
+
+    def _sync_catalog_state(self):
+        self.voice_map = self.catalog.refresh()
+        self._update_sorted_keys()
 
     # === 图像渲染辅助函数 ===
     def _load_image_font(self, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
@@ -988,62 +997,16 @@ class AiriVoice(Star):
         img.paste(base, (0, 0), base)
 
     def _load_local_voices(self):
-        count = 0
-        for file_path in self.voice_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXT:
-                keyword = file_path.stem.strip()
-                if keyword:
-                    self.voice_map[keyword] = str(file_path)
-                    count += 1
-        if count > 0:
-            logger.info(f"[AiriVoice] 从本地加载 {count} 个语音")
+        self._sync_catalog_state()
 
     def _load_user_added_voices(self):
-        count = 0
-        for file_path in self.user_added_dir.iterdir():
-            if file_path.is_file() and file_path.suffix.lower() in ALLOWED_EXT:
-                keyword = file_path.stem.strip()
-                if keyword:
-                    if keyword in self.voice_map:
-                        logger.warning(f"[AiriVoice] 用户添加关键词冲突：'{keyword}' 已存在，将覆盖")
-                    self.voice_map[keyword] = str(file_path)
-                    count += 1
-        if count > 0:
-            logger.info(f"[AiriVoice] 从用户添加目录加载 {count} 个语音")
+        self._sync_catalog_state()
 
     def _load_web_voices(self, config: dict = None):
-        if config is None:
-            return
-        extra_pool = config.get("extra_voice_pool", [])
-        if not extra_pool:
-            return
-        logger.debug(f"[AiriVoice] 网页相对路径池：{extra_pool}")
-        loaded = 0
-        data_dir_resolved = self.data_dir.resolve()
-        for rel_path in extra_pool:
-            if not isinstance(rel_path, str) or not rel_path.strip():
-                continue
-            try:
-                abs_path = (self.data_dir / rel_path).resolve()
-                if not abs_path.is_relative_to(data_dir_resolved):
-                    logger.warning(f"[AiriVoice] 检测到非法路径：{rel_path}")
-                    continue
-            except (ValueError, OSError) as e:
-                logger.warning(f"[AiriVoice] 路径解析失败：{rel_path} - {e}")
-                continue
-            if abs_path.exists() and abs_path.is_file():
-                if abs_path.suffix.lower() not in ALLOWED_EXT:
-                    logger.warning(f"[AiriVoice] 忽略非音频文件：{abs_path}")
-                    continue
-                keyword = abs_path.stem.strip()
-                if keyword:
-                    self.voice_map[keyword] = str(abs_path)
-                    loaded += 1
-                    logger.debug(f"[AiriVoice] 网页加载：'{keyword}' → {abs_path}")
-            else:
-                logger.warning(f"[AiriVoice] 文件不存在：{abs_path} (相对：{rel_path})")
-        if loaded > 0:
-            logger.info(f"[AiriVoice] 从网页配置加载 {loaded} 个额外语音")
+        if config is not None:
+            self.config = config
+        self.catalog.set_extra_voice_pool(self._configured_extra_voice_pool())
+        self._sync_catalog_state()
 
     def _check_admin(self, event: AstrMessageEvent) -> bool:
         if self.admin_mode == "all":
@@ -1396,38 +1359,18 @@ class AiriVoice(Star):
         # 优先使用原始消息判断前缀，避免用户必须发送 //随机...。
         raw_text = getattr(getattr(event, "message_obj", None), "raw_message", None)
         raw_text = raw_text.strip() if isinstance(raw_text, str) else None
-        current_pool_len = len(self.config.get("extra_voice_pool", []))
-        if current_pool_len > self.last_pool_len:
+        current_extra_voice_pool = self._configured_extra_voice_pool()
+        if current_extra_voice_pool != self.last_extra_voice_pool:
             logger.info("[AiriVoice] 检测到网页配置变化，自动刷新语音列表")
             self._load_web_voices(self.config)
-            self._update_sorted_keys()
-            self.last_pool_len = current_pool_len
+            self.last_extra_voice_pool = current_extra_voice_pool
 
-        # 随机语音有独立的处理逻辑，必须在处理前完成前缀校验。
-        is_random_text = text.startswith("随机") or text.startswith("/随机")
-        is_random_raw_text = (
-            raw_text is not None
-            and (raw_text.startswith("随机") or raw_text.startswith("/随机"))
-        )
-        if self.enable_prefix and (is_random_text or is_random_raw_text):
-            # “随机语音”是独立关键词，允许不带前缀直接触发全局随机语音。
-            direct_random_keyword = text == "随机语音" or raw_text == "随机语音"
-            has_random_prefix = (
-                bool(re.match(r"^/(?!/)随机", raw_text))
-                if raw_text is not None
-                else text.startswith("/随机")
-            )
-            if not direct_random_keyword and not has_random_prefix:
-                return
-            if has_random_prefix and raw_text is not None:
-                # message_str 可能已经被命令解析去掉首个 /，因此用原始消息恢复关键词。
-                text = raw_text[1:].strip()
-            elif has_random_prefix and text.startswith("/随机"):
-                text = text[1:].strip()
+        request = parse_request(text, self.enable_prefix, self.trigger_mode, raw_text)
+        if request.kind in {"ignore", "admin_command"}:
+            return
 
-        # 随机语音处理...
-        if text.startswith("随机") and self.voice_map:
-            if text in {"随机发条语音", "随机语音"}:
+        if request.kind in {"random_all", "random_filter"} and self.voice_map:
+            if request.kind == "random_all":
                 name = random.choice(list(self.voice_map.keys()))
                 matched_path = self.voice_map.get(name)
                 if matched_path:
@@ -1441,30 +1384,22 @@ class AiriVoice(Star):
                     yield event.plain_result("当前没有可用语音～")
                 return
 
-            m = re.match(r"^随机\s*(.+)$", text)
-            if m:
-                kw = m.group(1).strip()
-                candidates = [name for name in self.voice_map.keys() if kw in name]
-                if not candidates:
-                    yield event.plain_result(f"未找到包含「{kw}」的语音")
-                    return
-                name = random.choice(candidates)
-                matched_path = self.voice_map.get(name)
-                if matched_path:
-                    try:
-                        yield event.chain_result([Record.fromFileSystem(matched_path)])
-                    except Exception as e:
-                        logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
-                        yield event.plain_result("语音发送失败")
+            kw = request.keyword or ""
+            candidates = [name for name in self.voice_map.keys() if kw in name]
+            if not candidates:
+                yield event.plain_result(f"未找到包含「{kw}」的语音")
                 return
+            name = random.choice(candidates)
+            matched_path = self.voice_map.get(name)
+            if matched_path:
+                try:
+                    yield event.chain_result([Record.fromFileSystem(matched_path)])
+                except Exception as e:
+                    logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
+                    yield event.plain_result("语音发送失败")
+            return
 
-        # 普通关键词处理...
-        keyword = text
-        if self.trigger_mode == "prefix":
-            match = re.search(r"^#voice\s+(.+)", text, re.I)
-            if not match:
-                return
-            keyword = match.group(1).strip()
+        keyword = request.keyword
 
         matched_path = self.voice_map.get(keyword)
         if matched_path:
@@ -1560,9 +1495,6 @@ class AiriVoice(Star):
             return
             
         name = name.strip()
-        if name in self.voice_map:
-            yield event.plain_result(f"⚠️ 语音「{name}」已存在，如需覆盖请先删除旧语音")
-            return
 
         # 1. 获取本地 Path (由修改后的 _get_audio_url 提供)
         local_path = await self._get_audio_url(event)
@@ -1593,14 +1525,13 @@ class AiriVoice(Star):
             else:
                 ext = ".amr" # 最后的兜底
 
-        # 4. 保存文件
-        file_path = self.user_added_dir / f"{name}{ext}"
         try:
-            with open(file_path, "wb") as f:
-                f.write(audio_data)
-            self.voice_map[name] = str(file_path)
-            self._update_sorted_keys()
-            yield event.plain_result(f"✅ 语音「{name}」添加成功！\n📁 文件：{name}{ext}\n💾 大小：{len(audio_data) / 1024:.2f} KB")
+            entry = self.catalog.save_user_upload(f"upload{ext}", name, audio_data)
+            self._sync_catalog_state()
+            yield event.plain_result(f"✅ 语音「{name}」添加成功！\n📁 文件：{entry.path.name}\n💾 大小：{len(audio_data) / 1024:.2f} KB")
+        except CatalogError as e:
+            logger.warning(f"[AiriVoice] 保存语音校验失败：{e.code}")
+            yield event.plain_result(f"❌ 保存语音失败：{e.message}")
         except Exception as e:
             logger.error(f"[AiriVoice] 保存语音失败：{e}")
             yield event.plain_result(f"❌ 保存语音失败：{str(e)}")
@@ -1611,23 +1542,41 @@ class AiriVoice(Star):
         if not self._check_admin(event):
             yield event.plain_result("❌ 权限不足：此命令仅限管理员使用")
             return
-        if name not in self.voice_map:
+        file_path = self.voice_map.get(name)
+        if not file_path:
             yield event.plain_result(f"❌ 语音「{name}」不存在")
             return
-        file_path = Path(self.voice_map[name])
-        try:
-            file_path.resolve().relative_to(self.user_added_dir.resolve())
-        except ValueError:
+        entry = next(
+            (
+                item
+                for item in self.catalog.list_entries(source="user_added")
+                if item.name == name and str(item.path) == file_path
+            ),
+            None,
+        )
+        if entry is None:
             yield event.plain_result(f"⚠️ 只能删除通过 /voice.add 添加的语音，本地 voices/ 和网页上传的文件请手动管理")
             return
         try:
-            file_path.unlink()
-            del self.voice_map[name]
-            self._update_sorted_keys()
+            self.catalog.delete(entry.id)
+            self._sync_catalog_state()
             yield event.plain_result(f"✅ 语音「{name}」已删除")
+        except CatalogError as e:
+            logger.warning(f"[AiriVoice] 删除语音校验失败：{e.code}")
+            yield event.plain_result(f"❌ 删除失败：{e.message}")
         except Exception as e:
             logger.error(f"[AiriVoice] 删除语音失败：{e}")
             yield event.plain_result(f"❌ 删除失败：{str(e)}")
+
+    @filter.command("voice.reload")
+    async def voice_reload(self, event: AstrMessageEvent):
+        """重新扫描受支持目录中的语音文件。"""
+        if not self._check_admin(event):
+            yield event.plain_result("❌ 权限不足：此命令仅限管理员使用")
+            return
+        self._load_web_voices(self.config)
+        self.last_extra_voice_pool = self._configured_extra_voice_pool()
+        yield event.plain_result(f"✅ 已重新加载，共 {len(self.voice_map)} 个语音")
 
     @filter.command("voice.check")
     async def check_permission(self, event: AstrMessageEvent):
