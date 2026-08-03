@@ -1402,7 +1402,12 @@ class AiriVoice(Star):
             self.last_pool_len = current_pool_len
 
         # 随机语音有独立的处理逻辑，必须在处理前完成前缀校验。
-        if self.enable_prefix:
+        is_random_text = text.startswith("随机") or text.startswith("/随机")
+        is_random_raw_text = (
+            raw_text is not None
+            and (raw_text.startswith("随机") or raw_text.startswith("/随机"))
+        )
+        if self.enable_prefix and (is_random_text or is_random_raw_text):
             # “随机语音”是独立关键词，允许不带前缀直接触发全局随机语音。
             direct_random_keyword = text == "随机语音" or raw_text == "随机语音"
             has_random_prefix = (
