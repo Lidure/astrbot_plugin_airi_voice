@@ -9,5 +9,7 @@ def test_page_assets_exist_and_reference_each_other():
     assert 'href="style.css"' in page
     assert 'src="app.js"' in page
     assert "Airi Voice" in page
+    assert 'accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*"' in page
+    assert ".silk" in page and ".amr" in page
     assert (page_root / "style.css").is_file()
     assert (page_root / "app.js").is_file()
