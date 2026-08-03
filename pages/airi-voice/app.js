@@ -192,7 +192,12 @@
     showError(null);
     try {
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
-      const blob = response instanceof Blob ? response : await response.blob();
+      const payload = await readResponse(response);
+      if (!payload || typeof payload.data !== "string") throw new Error("音频数据无效");
+      const binary = atob(payload.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const blob = new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });

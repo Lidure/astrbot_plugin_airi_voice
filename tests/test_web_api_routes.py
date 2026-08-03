@@ -167,12 +167,15 @@ def test_list_treats_empty_source_filter_as_all_sources():
 
 def test_audio_uses_file_response_and_never_returns_path_json():
     routes, plugin = make_routes(FakeRequest())
+    plugin.catalog.audio_path = lambda entry_id: (plugin.catalog.calls.append(("audio", entry_id)) or Path(__file__))
 
     response = run(routes.get_audio, "builtin:Bell.wav")
 
-    assert response["kind"] == "file"
-    assert response["filename"] is None
-    assert response["content_type"] == "audio/wav"
+    assert response["kind"] == "json"
+    assert response["status"] == 200
+    assert response["body"]["filename"] == "test_web_api_routes.py"
+    assert response["body"]["content_type"] == "text/x-python"
+    assert response["body"]["data"]
     assert plugin.catalog.calls == [("audio", "builtin:Bell.wav")]
 
 
@@ -181,7 +184,7 @@ def test_audio_accepts_url_encoded_voice_id_from_dashboard_bridge():
 
     response = run(routes.get_audio, "builtin%3ABell.wav")
 
-    assert response["kind"] == "file"
+    assert response["kind"] == "json"
     assert plugin.catalog.calls == [("audio", "builtin%3ABell.wav")]
 
 

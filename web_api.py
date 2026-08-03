@@ -5,6 +5,7 @@ older AstrBot versions can still load the chat plugin without WebUI support.
 """
 
 from dataclasses import dataclass
+import base64
 import inspect
 import logging
 import mimetypes
@@ -153,10 +154,13 @@ class VoiceManagementRoutes:
         try:
             path = self.plugin.catalog.audio_path(voice_id)
             content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            # Do not pass ``filename`` here: AstrBot's file_response maps it to
-            # Content-Disposition: attachment, which makes browsers/IDM download
-            # the preview instead of allowing the page's Audio element to play it.
-            return self._web().file_response(path, content_type=content_type)
+            return self._json(
+                {
+                    "filename": path.name,
+                    "content_type": content_type,
+                    "data": base64.b64encode(path.read_bytes()).decode("ascii"),
+                }
+            )
         except CatalogError as error:
             return self._catalog_error(error)
         except Exception:
