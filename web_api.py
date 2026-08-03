@@ -52,6 +52,30 @@ class _WebApiPrimitives:
     file_response: Any
 
 
+class _DashboardRequestEvent:
+    """Minimal event shape used only to preserve existing whitelist/all checks."""
+
+    def __init__(self, username: Any):
+        self.sender_id = username
+        self.user_id = username
+        self.sender_name = username
+        self.nickname = username
+
+
+def dashboard_request_is_admin(plugin: Any, username: Any) -> bool:
+    """Apply chat admin policy to a trusted authenticated Dashboard username.
+
+    AstrBot supplies ``request.username`` only from its authenticated Plugin
+    Pages context. In ``admin`` mode, a non-empty username is therefore the
+    Dashboard's admin boundary; an absent username is never accepted. The
+    existing plugin policy remains authoritative for ``all`` and ``whitelist``.
+    """
+
+    if getattr(plugin, "admin_mode", None) == "admin":
+        return isinstance(username, str) and bool(username.strip())
+    return bool(plugin._check_admin(_DashboardRequestEvent(username)))
+
+
 class VoiceManagementRoutes:
     """Thin, independently testable handlers around the safe voice catalog."""
 
@@ -121,19 +145,21 @@ class VoiceManagementRoutes:
             LOGGER.exception("[AiriVoice] voice audio WebUI request failed")
             return self._error("internal_error", "unable to load voice audio", 500)
 
-    async def upload_voice(self) -> Any:
+    async def upload_voice(self, keyword: str | None = None) -> Any:
         if not self._is_admin():
             return self._forbidden()
         try:
             request = self._web().request
-            form = await request.form()
+            form = await request.form() if keyword is None else {}
             upload = (await request.files()).get("file")
             if upload is None or not getattr(upload, "filename", None):
                 raise CatalogError("invalid_upload", "an audio file is required")
             data = upload.read() if callable(getattr(upload, "read", None)) else None
             if inspect.isawaitable(data):
                 data = await data
-            entry = self.plugin.catalog.save_upload(upload.filename, form.get("keyword", ""), data)
+            if keyword is None:
+                keyword = form.get("keyword") or request.query.get("keyword", "")
+            entry = self.plugin.catalog.save_upload(upload.filename, keyword, data)
             self.plugin.refresh_voice_catalog()
             return self._json({"item": self._entry_json(entry)})
         except CatalogError as error:
@@ -190,6 +216,7 @@ def register_web_features(context: Any, plugin: Any) -> RegistrationResult:
             (f"/{PLUGIN_NAME}/voices", routes.list_voices, ["GET"], "List voices"),
             (f"/{PLUGIN_NAME}/voices/<voice_id>/audio", routes.get_audio, ["GET"], "Get voice audio"),
             (f"/{PLUGIN_NAME}/voices/upload", routes.upload_voice, ["POST"], "Upload voice"),
+            (f"/{PLUGIN_NAME}/voices/upload/<keyword>", routes.upload_voice, ["POST"], "Upload voice with keyword"),
             (f"/{PLUGIN_NAME}/voices/<voice_id>", routes.delete_voice, ["DELETE"], "Delete voice"),
             (f"/{PLUGIN_NAME}/voices/reload", routes.reload_voices, ["POST"], "Reload voices"),
         ):

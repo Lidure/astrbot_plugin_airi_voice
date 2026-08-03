@@ -19,7 +19,7 @@ from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from web_api import register_web_features
+from web_api import dashboard_request_is_admin, register_web_features
 from request_parser import parse_request
 from voice_catalog import CatalogError, VoiceCatalog
 
@@ -813,19 +813,9 @@ class AiriVoice(Star):
         self._update_sorted_keys()
 
     def web_request_is_admin(self, username: Optional[str]) -> bool:
-        """Apply the existing admin policy to AstrBot's Dashboard username."""
+        """Apply the trusted AstrBot Dashboard identity boundary to admin policy."""
 
-        event = type(
-            "DashboardRequestEvent",
-            (),
-            {
-                "sender_id": username,
-                "user_id": username,
-                "sender_name": username,
-                "nickname": username,
-            },
-        )()
-        return self._check_admin(event)
+        return dashboard_request_is_admin(self, username)
 
     def refresh_voice_catalog(self) -> None:
         """Synchronize catalog-backed chat state after a WebUI mutation."""

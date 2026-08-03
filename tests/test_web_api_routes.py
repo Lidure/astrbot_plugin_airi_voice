@@ -84,6 +84,8 @@ class FakeCatalog:
 
     def save_upload(self, filename, keyword, data):
         self.calls.append(("upload", filename, keyword, data))
+        if any(part in keyword for part in ("/", "\\", "..", "\n")):
+            raise CatalogError("invalid_keyword", "keyword is invalid")
         if keyword == "bad":
             raise CatalogError("invalid_keyword", "keyword is invalid")
         return self.entries[0]
@@ -95,24 +97,32 @@ class FakeCatalog:
 
 
 class FakePlugin:
-    def __init__(self, request, *, admin=True):
+    def __init__(self, request, *, admin=True, admin_mode=None, whitelist=()):
         self.catalog = FakeCatalog()
         self._request = request
         self._admin = admin
+        self.admin_mode = admin_mode
+        self.admin_whitelist = set(whitelist)
         self.refresh_count = 0
 
     def web_request_is_admin(self, username):
         assert username == self._request.username
+        if self.admin_mode == "admin":
+            return bool(username and username.strip())
+        if self.admin_mode == "all":
+            return True
+        if self.admin_mode == "whitelist":
+            return username in self.admin_whitelist
         return self._admin
 
     def refresh_voice_catalog(self):
         self.refresh_count += 1
 
 
-def make_routes(request, *, admin=True):
+def make_routes(request, *, admin=True, admin_mode=None, whitelist=()):
     from web_api import VoiceManagementRoutes
 
-    plugin = FakePlugin(request, admin=admin)
+    plugin = FakePlugin(request, admin=admin, admin_mode=admin_mode, whitelist=whitelist)
     return VoiceManagementRoutes(plugin, FakeWeb(request)), plugin
 
 
@@ -191,6 +201,34 @@ def test_admin_upload_dispatches_catalog_and_refreshes_plugin_state():
     assert response["body"]["item"]["id"] == "builtin:Bell.wav"
     assert plugin.catalog.calls == [("upload", "new.mp3", "new", b"audio")]
     assert plugin.refresh_count == 1
+
+
+def test_dynamic_keyword_upload_uses_path_keyword_and_catalog_validation():
+    request = FakeRequest(files={"file": FakeUpload("new.mp3", b"audio")})
+    routes, plugin = make_routes(request)
+
+    response = run(routes.upload_voice, "path keyword")
+    unsafe_response = run(routes.upload_voice, "../secret")
+
+    assert response["status"] == 200
+    assert plugin.catalog.calls[0] == ("upload", "new.mp3", "path keyword", b"audio")
+    assert unsafe_response == {
+        "kind": "json",
+        "status": 400,
+        "body": {"error": {"code": "invalid_keyword", "message": "keyword is invalid"}},
+    }
+
+
+def test_direct_upload_client_can_fallback_to_query_keyword():
+    request = FakeRequest(
+        query={"keyword": "query keyword"}, files={"file": FakeUpload("new.mp3", b"audio")}
+    )
+    routes, plugin = make_routes(request)
+
+    response = run(routes.upload_voice)
+
+    assert response["status"] == 200
+    assert plugin.catalog.calls == [("upload", "new.mp3", "query keyword", b"audio")]
 
 
 def test_admin_delete_and_reload_dispatch_catalog_and_refresh_state():
@@ -275,7 +313,42 @@ def test_registration_registers_public_routes_and_swallows_route_registration_fa
         "/airi_voice/voices",
         "/airi_voice/voices/<voice_id>/audio",
         "/airi_voice/voices/upload",
+        "/airi_voice/voices/upload/<keyword>",
         "/airi_voice/voices/<voice_id>",
         "/airi_voice/voices/reload",
     ]
     assert failed.api_registered is False
+
+
+def test_dashboard_admin_mode_accepts_only_nonempty_authenticated_username():
+    from web_api import dashboard_request_is_admin
+
+    class Policy:
+        admin_mode = "admin"
+
+        def _check_admin(self, event):
+            raise AssertionError("admin-mode Dashboard identity must use trusted username")
+
+    policy = Policy()
+
+    assert dashboard_request_is_admin(policy, "dashboard-user") is True
+    assert dashboard_request_is_admin(policy, "  ") is False
+    assert dashboard_request_is_admin(policy, None) is False
+
+
+def test_dashboard_all_and_whitelist_modes_keep_existing_semantics():
+    from web_api import dashboard_request_is_admin
+
+    class Policy:
+        def __init__(self, mode, whitelist=()):
+            self.admin_mode = mode
+            self.admin_whitelist = set(whitelist)
+
+        def _check_admin(self, event):
+            if self.admin_mode == "all":
+                return True
+            return event.sender_id in self.admin_whitelist or event.sender_name in self.admin_whitelist
+
+    assert dashboard_request_is_admin(Policy("all"), None) is True
+    assert dashboard_request_is_admin(Policy("whitelist", ["allowed"]), "allowed") is True
+    assert dashboard_request_is_admin(Policy("whitelist", ["allowed"]), "other") is False
