@@ -4,6 +4,12 @@
 
 ---
 
+## [2.8.1] - 2026-08-03
+
+### 修复
+
+- 修复 AstrBot 以 `data.plugins.<插件名>.main` 包方式加载插件时，无法导入插件内部模块的问题。
+
 ## [2.8.0] - 2026-08-03
 
 - WebUI 上传继续支持历史 `.silk` / `.amr` 格式，并补充支持 `.flac` / `.m4a`；Plugin Page 入口位于 `pages/airi-voice/index.html`。

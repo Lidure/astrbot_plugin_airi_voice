@@ -11,7 +11,10 @@ import mimetypes
 from pathlib import Path
 from typing import Any
 
-from voice_catalog import CatalogError, VoiceEntry
+if __package__:
+    from .voice_catalog import CatalogError, VoiceEntry
+else:
+    from voice_catalog import CatalogError, VoiceEntry
 
 
 LOGGER = logging.getLogger(__name__)

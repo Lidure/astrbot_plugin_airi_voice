@@ -19,9 +19,14 @@ from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
-from web_api import dashboard_request_is_admin, register_web_features
-from request_parser import parse_request
-from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
+if __package__:
+    from .web_api import dashboard_request_is_admin, register_web_features
+    from .request_parser import parse_request
+    from .voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
+else:
+    from web_api import dashboard_request_is_admin, register_web_features
+    from request_parser import parse_request
+    from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 
 try:
     from astrbot.api.provider import ProviderRequest
@@ -607,7 +612,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
     "airi_voice",
     "lidure",
     "输入关键词发送对应语音",
-    "2.8.0",
+    "2.8.1",
     "https://github.com/Lidure/astrbot_plugin_airi_voice",
 )
 class AiriVoice(Star):
