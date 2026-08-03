@@ -22,6 +22,17 @@ class RegistrationResult:
     api_registered: bool
 
 
+def _has_discoverable_page(pages_dir: Path) -> bool:
+    """Return whether AstrBot can discover a ``pages/<name>/index.html`` page."""
+
+    if not pages_dir.is_dir():
+        return False
+    return any(
+        page_dir.is_dir() and (page_dir / "index.html").is_file()
+        for page_dir in pages_dir.iterdir()
+    )
+
+
 def register_web_features(context: Any, plugin: Any) -> RegistrationResult:
     """Detect Plugin Pages support without making it a plugin requirement.
 
@@ -42,4 +53,10 @@ def register_web_features(context: Any, plugin: Any) -> RegistrationResult:
         LOGGER.warning("[AiriVoice] Plugin Pages/Web API is unavailable; WebUI is disabled: %s", exc)
         return RegistrationResult(False, False)
 
-    return RegistrationResult(pages_registered=pages_dir.is_dir(), api_registered=False)
+    try:
+        pages_registered = _has_discoverable_page(pages_dir)
+    except Exception as exc:
+        LOGGER.warning("[AiriVoice] Plugin Pages/Web API is unavailable; WebUI is disabled: %s", exc)
+        return RegistrationResult(False, False)
+
+    return RegistrationResult(pages_registered=pages_registered, api_registered=False)
