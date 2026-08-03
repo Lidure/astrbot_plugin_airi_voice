@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Airi Voice 音频管理</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Airi Voice</p>
+          <h1>音频管理</h1>
+          <p class="intro">搜索、试听并管理机器人可用的语音。上传或删除需要管理权限。</p>
+        </div>
+        <button id="refresh-button" type="button" class="button button-secondary" data-mutation>刷新列表</button>
+      </header>
+
+      <section class="summary-grid" aria-label="当前状态">
+        <article class="summary-card">
+          <span class="summary-label">当前条目</span>
+          <strong id="voice-total">0</strong>
+          <span>会随搜索条件变化</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">管理权限提示</span>
+          <strong>上传、删除与重载</strong>
+          <span><code>admin_mode=admin</code> 时，请先配置 <code>webui_admin_users</code>。</span>
+        </article>
+      </section>
+
+      <p id="status-message" class="status-message" role="status" aria-live="polite">正在准备列表…</p>
+      <p id="error-message" class="error-message" role="alert" hidden></p>
+
+      <section class="panel" aria-labelledby="browse-heading">
+        <div class="panel-heading">
+          <div>
+            <h2 id="browse-heading">浏览语音</h2>
+            <p>按名称搜索，或按来源筛选。</p>
+          </div>
+        </div>
+        <div class="filters">
+          <label>
+            搜索名称
+            <input id="search-input" type="search" placeholder="例如：生日快乐" autocomplete="off">
+          </label>
+          <label>
+            来源
+            <select id="source-filter">
+              <option value="">全部来源</option>
+              <option value="builtin">插件内置</option>
+              <option value="user_added">已上传</option>
+              <option value="extra_voices">额外目录</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="empty-state" class="empty-state" hidden>
+          <h3>没有找到语音</h3>
+          <p>请调整搜索条件，或上传一个新的音频文件。</p>
+        </div>
+        <div class="table-wrap">
+          <table id="voice-table">
+            <caption class="sr-only">可用语音列表</caption>
+            <thead>
+              <tr><th scope="col">名称</th><th scope="col">来源</th><th scope="col">格式</th><th scope="col">大小</th><th scope="col">操作</th></tr>
+            </thead>
+            <tbody id="voice-list"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="upload-heading">
+        <div class="panel-heading">
+          <div>
+            <h2 id="upload-heading">上传新语音</h2>
+            <p>填写触发关键词并选择一个音频文件；服务器会验证格式、大小和重复名称。</p>
+          </div>
+        </div>
+        <form id="upload-form">
+          <div class="upload-fields">
+            <label>
+              触发关键词
+              <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
+            </label>
+            <label>
+              音频文件
+              <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.flac,.m4a,audio/*">
+            </label>
+          </div>
+          <button type="submit" class="button" data-mutation>上传语音</button>
+        </form>
+      </section>
+    </main>
+
+    <dialog id="delete-dialog" aria-labelledby="delete-title">
+      <form method="dialog" class="dialog-content">
+        <h2 id="delete-title">删除语音？</h2>
+        <p id="delete-description">此操作无法撤销。</p>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit" class="button button-secondary">取消</button>
+          <button id="confirm-delete-button" value="confirm" type="submit" class="button button-danger" data-mutation>确认删除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

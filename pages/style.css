@@ -1,0 +1,80 @@
+:root {
+  color-scheme: light dark;
+  --page-bg: var(--astrbot-bg, #f5f7fb);
+  --surface: var(--astrbot-card-bg, #ffffff);
+  --text: var(--astrbot-text, #1f2937);
+  --muted: var(--astrbot-text-muted, #667085);
+  --border: var(--astrbot-border, #d9deea);
+  --accent: var(--astrbot-primary, #4464d9);
+  --accent-text: #ffffff;
+  --danger: var(--astrbot-danger, #c73535);
+  --focus: #f6b73c;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+:root[data-theme="dark"], [data-theme="dark"] {
+  --page-bg: var(--astrbot-bg, #151923);
+  --surface: var(--astrbot-card-bg, #202634);
+  --text: var(--astrbot-text, #edf1f8);
+  --muted: var(--astrbot-text-muted, #b6c0d1);
+  --border: var(--astrbot-border, #394257);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--text); background: var(--page-bg); }
+button, input, select { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.page-shell { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; padding: 2rem 0 3rem; }
+.page-header, .panel-heading, .filters, .upload-fields, .summary-grid, .dialog-actions { display: flex; gap: 1rem; }
+.page-header, .panel-heading { justify-content: space-between; align-items: flex-start; }
+.eyebrow { margin: 0; color: var(--accent); font-weight: 700; letter-spacing: .04em; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: .4rem; font-size: clamp(1.75rem, 4vw, 2.4rem); }
+h2 { margin-bottom: .3rem; font-size: 1.25rem; }
+.intro, .panel-heading p, .summary-card span, .status-message { color: var(--muted); }
+.summary-grid { margin: 1.5rem 0; }
+.summary-card, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: .75rem; box-shadow: 0 1px 2px rgb(0 0 0 / .04); }
+.summary-card { flex: 1; min-width: 0; padding: 1rem; display: grid; gap: .3rem; }
+.summary-card strong { font-size: 1.15rem; }
+.summary-label { font-size: .9rem; }
+.panel { margin-top: 1.25rem; padding: 1.25rem; }
+.filters, .upload-fields { align-items: end; flex-wrap: wrap; margin-top: 1rem; }
+label { display: grid; flex: 1 1 16rem; gap: .45rem; font-weight: 600; }
+input, select { width: 100%; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: .4rem; padding: .65rem .75rem; }
+.button { border: 1px solid var(--accent); border-radius: .4rem; padding: .62rem .85rem; color: var(--accent-text); background: var(--accent); cursor: pointer; white-space: nowrap; }
+.button:hover:not(:disabled) { filter: brightness(1.08); }
+.button:disabled { cursor: not-allowed; opacity: .55; }
+.button-secondary { color: var(--text); background: transparent; border-color: var(--border); }
+.button-danger { color: #fff; background: var(--danger); border-color: var(--danger); }
+.button-small { padding: .4rem .6rem; font-size: .9rem; }
+.status-message, .error-message { margin: 1rem 0; }
+.error-message { padding: .75rem 1rem; color: #fff; background: var(--danger); border-radius: .4rem; }
+.table-wrap { overflow-x: auto; margin-top: 1rem; }
+table { width: 100%; border-collapse: collapse; min-width: 650px; }
+th, td { padding: .75rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { color: var(--muted); font-size: .9rem; }
+.row-actions { display: flex; gap: .5rem; }
+.empty-state { padding: 2rem 1rem; text-align: center; color: var(--muted); }
+.empty-state h3 { color: var(--text); }
+dialog { width: min(28rem, calc(100% - 2rem)); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: .75rem; box-shadow: 0 1rem 3rem rgb(0 0 0 / .35); }
+dialog::backdrop { background: rgb(0 0 0 / .5); }
+.dialog-content { display: grid; gap: 1rem; }
+.dialog-content p { margin-bottom: 0; }
+.dialog-actions { justify-content: end; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 640px) {
+  .page-shell { width: min(100% - 1rem, 1120px); padding-top: 1rem; }
+  .page-header, .panel-heading, .summary-grid { flex-direction: column; }
+  .page-header .button { width: 100%; }
+  .panel { padding: 1rem; }
+  .filters, .upload-fields { display: grid; }
+  table { min-width: 0; }
+  thead { display: none; }
+  tr, td { display: block; }
+  tr { border-bottom: 1px solid var(--border); padding: .7rem 0; }
+  td { border: 0; padding: .2rem 0; }
+  td:first-child { font-weight: 700; }
+  .row-actions { margin-top: .5rem; flex-wrap: wrap; }
+}
