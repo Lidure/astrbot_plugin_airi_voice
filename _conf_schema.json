@@ -25,6 +25,12 @@
     "hint": "每行一个用户 ID 或昵称，仅当 admin_mode 为 whitelist 时生效",
     "default": ""
   },
+  "webui_admin_users": {
+    "description": "WebUI 管理员用户名",
+    "type": "list",
+    "hint": "仅当 admin_mode 为 admin 时生效：Dashboard 的上传、删除、重载操作要求已认证的 Dashboard 用户名与此列表完全一致。admin_mode 为 all 时所有人可操作；whitelist 沿用 admin_whitelist 聊天权限策略。",
+    "default": []
+  },
   "list_as_image": {
     "description": "语音列表是否以图片形式显示",
     "type": "bool",

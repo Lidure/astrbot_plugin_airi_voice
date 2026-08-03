@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.7-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.8.0-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -93,6 +93,40 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 如果只想为“随机”关键词增加 `/` 前缀，可在插件配置中开启 `enable_prefix`。开启后发送
 `/随机...` 才会触发，固定关键词 `随机语音` 仍可直接触发；其他关键词不受影响。该选项默认关闭。
+
+---
+
+## 🖥️ WebUI 语音管理（v2.8.0）
+
+支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/index.html` 管理页面；打开后可搜索、按来源筛选、试听、上传、删除和重载语音。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
+
+> 低版本 AstrBot 不支持 Plugin Pages / Web API 时，插件仍可正常加载；请继续使用聊天命令和插件配置页管理语音。WebUI 的实际页面发现、桥接和权限行为仍需要在目标 AstrBot Dashboard 中手动验证。
+
+### 新手快速开始
+
+1. 在 AstrBot Dashboard 打开 **插件管理** → **Airi Voice** → **插件详情页**。
+2. 在页面中用搜索和来源筛选查找语音，点击试听确认内容。
+3. 填写安全的触发关键词后上传音频；WebUI 仅接受 `.wav`、`.mp3`、`.ogg`、`.flac`、`.m4a`，单文件最大 **20 MB**。
+4. 需要时删除自己添加或网页上传的语音，或点击重载刷新目录。
+5. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。
+
+如果页面不可用，请改用 `/voice.list`、`/voice.add 名字`、`/voice.delete 名字` 和 `/voice.reload`；管理命令仍受原有权限控制。
+
+### 触发规则矩阵
+
+| 输入 | 结果 |
+| :--- | :--- |
+| 普通关键词 | 直接触发 |
+| `随机语音` | 直接触发 |
+| `/随机关键词` | 仅在开启 `enable_prefix`（随机前缀）时触发 |
+| `//随机关键词` | 不触发 |
+
+### WebUI 安全限制
+
+- 上传关键词会进行安全校验；包含路径分隔符、`..` 或控制字符的关键词会被拒绝。
+- 重复的有效关键词会被拒绝，避免覆盖或产生歧义。
+- 内置 `voices/` 语音为只读，不能从页面删除；页面只能删除用户添加或网页上传的语音。
+- 所有上传、删除和重载都是管理员操作，且目录穿越会被阻止。
 
 ---
 
