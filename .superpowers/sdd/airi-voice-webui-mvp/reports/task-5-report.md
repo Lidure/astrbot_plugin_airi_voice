@@ -4,6 +4,8 @@
 
 Completed locally for the v2.8.0 WebUI MVP release documentation and metadata.
 
+Task 5 commit: `078092c0c3d3d07eb13f0bc0003948892246fd86`
+
 ## Changed files
 
 - `_conf_schema.json`: added the list-compatible `webui_admin_users` allowlist
