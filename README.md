@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.8.2-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.8.3-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -96,7 +96,7 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ---
 
-## 🖥️ WebUI 语音管理（v2.8.2）
+## 🖥️ WebUI 语音管理（v2.8.3）
 
 支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；打开后可搜索、按来源筛选、试听、上传、删除和重载语音。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
 

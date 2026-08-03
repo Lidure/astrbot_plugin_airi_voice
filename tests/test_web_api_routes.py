@@ -48,12 +48,13 @@ class FakeWeb:
         return {"kind": "json", "status": status_code, "body": payload}
 
     @staticmethod
-    def file_response(path, filename=None, content_type=None):
+    def file_response(path, filename=None, content_type=None, headers=None):
         return {
             "kind": "file",
             "path": Path(path),
             "filename": filename,
             "content_type": content_type,
+            "headers": headers,
         }
 
 
@@ -170,7 +171,7 @@ def test_audio_uses_file_response_and_never_returns_path_json():
     response = run(routes.get_audio, "builtin:Bell.wav")
 
     assert response["kind"] == "file"
-    assert response["filename"] == "Bell.wav"
+    assert response["filename"] is None
     assert response["content_type"] == "audio/wav"
     assert plugin.catalog.calls == [("audio", "builtin:Bell.wav")]
 

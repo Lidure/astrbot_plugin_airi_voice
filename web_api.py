@@ -153,7 +153,10 @@ class VoiceManagementRoutes:
         try:
             path = self.plugin.catalog.audio_path(voice_id)
             content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            return self._web().file_response(path, filename=path.name, content_type=content_type)
+            # Do not pass ``filename`` here: AstrBot's file_response maps it to
+            # Content-Disposition: attachment, which makes browsers/IDM download
+            # the preview instead of allowing the page's Audio element to play it.
+            return self._web().file_response(path, content_type=content_type)
         except CatalogError as error:
             return self._catalog_error(error)
         except Exception:
