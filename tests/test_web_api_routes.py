@@ -306,16 +306,16 @@ def test_registration_registers_public_routes_and_swallows_route_registration_fa
 
     successful_context = Context()
     successful = register_web_features(successful_context, Plugin())
-    failed = register_web_features(Context("/airi_voice/voices/reload"), Plugin())
+    failed = register_web_features(Context("/astrbot_plugin_airi_voice/voices/reload"), Plugin())
 
     assert successful.api_registered is True
     assert [route[0] for route in successful_context.routes] == [
-        "/airi_voice/voices",
-        "/airi_voice/voices/<voice_id>/audio",
-        "/airi_voice/voices/upload",
-        "/airi_voice/voices/upload/<keyword>",
-        "/airi_voice/voices/<voice_id>",
-        "/airi_voice/voices/reload",
+        "/astrbot_plugin_airi_voice/voices",
+        "/astrbot_plugin_airi_voice/voices/<voice_id>/audio",
+        "/astrbot_plugin_airi_voice/voices/upload",
+        "/astrbot_plugin_airi_voice/voices/upload/<keyword>",
+        "/astrbot_plugin_airi_voice/voices/<voice_id>",
+        "/astrbot_plugin_airi_voice/voices/reload",
     ]
     assert failed.api_registered is False
 

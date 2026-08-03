@@ -53,6 +53,20 @@ def test_lists_entries_with_search_source_filter_and_missing_configured_file(tmp
     assert error.value.code == "invalid_source"
 
 
+def test_configured_voice_pool_accepts_absolute_files_under_plugin_data_root(tmp_path):
+    configured = tmp_path / "data" / "managed" / "Configured.mp3"
+    configured.parent.mkdir(parents=True)
+    configured.write_bytes(b"configured")
+
+    catalog = make_catalog(tmp_path, [str(configured)])
+
+    entry = next(item for item in catalog.list_entries() if item.name == "Configured")
+    assert entry.source == "extra_voices"
+    assert entry.available is True
+    assert entry.path == configured.resolve()
+    assert catalog.audio_path(entry.id) == configured.resolve()
+
+
 def test_saves_valid_upload_at_exact_size_boundary(tmp_path):
     catalog = make_catalog(tmp_path)
     data = b"x" * MAX_UPLOAD_BYTES

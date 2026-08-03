@@ -18,7 +18,7 @@ else:
 
 
 LOGGER = logging.getLogger(__name__)
-PLUGIN_NAME = "airi_voice"
+PLUGIN_NAME = "astrbot_plugin_airi_voice"
 
 
 @dataclass(frozen=True)

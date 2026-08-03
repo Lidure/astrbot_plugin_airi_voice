@@ -110,6 +110,8 @@ class VoiceCatalog:
         entry = self.resolve_entry(entry_id)
         if entry.source == "builtin":
             raise CatalogError("read_only", "built-in voices cannot be deleted")
+        if entry.id.startswith("extra_voices:configured/"):
+            raise CatalogError("read_only", "configured voice pool entries cannot be deleted")
         if not entry.available:
             raise CatalogError("not_found", "voice entry does not exist")
         entry.path.unlink()
@@ -149,15 +151,24 @@ class VoiceCatalog:
     def _entry_for_configured_path(self, configured_path: str) -> VoiceEntry | None:
         if not isinstance(configured_path, str) or not configured_path.strip():
             return None
-        candidate = (self.data_root / configured_path).resolve()
-        root = self.roots["extra_voices"]
+        raw_path = Path(configured_path.strip())
+        candidate = (raw_path if raw_path.is_absolute() else self.data_root / raw_path).resolve()
         try:
-            relative = candidate.relative_to(root)
+            relative = candidate.relative_to(self.data_root)
         except ValueError:
             return None
         if candidate.suffix.lower() not in ALLOWED_EXTENSIONS:
             return None
-        return self._entry_for_path("extra_voices", candidate, available=candidate.is_file())
+        available = candidate.is_file()
+        return VoiceEntry(
+            id=self._entry_id("extra_voices", Path("configured") / relative),
+            name=candidate.stem.strip(),
+            source="extra_voices",
+            path=candidate,
+            extension=candidate.suffix.lower(),
+            size=candidate.stat().st_size if available else 0,
+            available=available,
+        )
 
     def _entry_for_path(self, source: str, path: Path, available: bool) -> VoiceEntry:
         root = self.roots[source]
