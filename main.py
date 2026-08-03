@@ -812,6 +812,27 @@ class AiriVoice(Star):
         self.voice_map = self.catalog.refresh()
         self._update_sorted_keys()
 
+    def web_request_is_admin(self, username: Optional[str]) -> bool:
+        """Apply the existing admin policy to AstrBot's Dashboard username."""
+
+        event = type(
+            "DashboardRequestEvent",
+            (),
+            {
+                "sender_id": username,
+                "user_id": username,
+                "sender_name": username,
+                "nickname": username,
+            },
+        )()
+        return self._check_admin(event)
+
+    def refresh_voice_catalog(self) -> None:
+        """Synchronize catalog-backed chat state after a WebUI mutation."""
+
+        self._load_web_voices(self.config)
+        self.last_extra_voice_pool = self._configured_extra_voice_pool()
+
     # === 图像渲染辅助函数 ===
     def _load_image_font(self, size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
         candidates = [

@@ -19,7 +19,10 @@ def test_registration_failure_does_not_raise():
 def test_registers_a_discoverable_static_page_when_web_api_is_supported(tmp_path):
     class SupportedContext:
         def register_web_api(self, route, view_handler, methods, desc):
-            raise AssertionError("Task 1 must not register route behavior")
+            self.routes.append((route, view_handler, methods, desc))
+
+        def __init__(self):
+            self.routes = []
 
     class Plugin:
         plugin_dir = tmp_path
@@ -29,10 +32,12 @@ def test_registers_a_discoverable_static_page_when_web_api_is_supported(tmp_path
     (page / "index.html").write_text("<!doctype html>", encoding="utf-8")
 
     from web_api import register_web_features
-    result = register_web_features(SupportedContext(), Plugin())
+    context = SupportedContext()
+    result = register_web_features(context, Plugin())
 
     assert result.pages_registered is True
-    assert result.api_registered is False
+    assert result.api_registered is True
+    assert len(context.routes) == 5
 
 
 def test_does_not_report_pages_registered_without_a_discoverable_index(tmp_path):
