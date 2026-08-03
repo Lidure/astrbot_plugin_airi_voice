@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import unquote
 
 
 ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".silk", ".amr", ".flac", ".m4a"}
@@ -118,7 +119,8 @@ class VoiceCatalog:
         self.refresh()
 
     def resolve_entry(self, entry_id: str) -> VoiceEntry:
-        entry = self._entries.get(entry_id)
+        normalized_id = unquote(entry_id) if isinstance(entry_id, str) else entry_id
+        entry = self._entries.get(normalized_id)
         if entry is None:
             raise CatalogError("not_found", "voice entry was not found")
         return entry

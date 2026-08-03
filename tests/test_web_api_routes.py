@@ -175,6 +175,15 @@ def test_audio_uses_file_response_and_never_returns_path_json():
     assert plugin.catalog.calls == [("audio", "builtin:Bell.wav")]
 
 
+def test_audio_accepts_url_encoded_voice_id_from_dashboard_bridge():
+    routes, plugin = make_routes(FakeRequest())
+
+    response = run(routes.get_audio, "builtin%3ABell.wav")
+
+    assert response["kind"] == "file"
+    assert plugin.catalog.calls == [("audio", "builtin%3ABell.wav")]
+
+
 @pytest.mark.parametrize("operation", ["upload", "delete", "reload"])
 def test_mutations_return_403_without_dashboard_admin_permission(operation):
     request = FakeRequest(

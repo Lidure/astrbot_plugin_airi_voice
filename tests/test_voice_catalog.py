@@ -29,6 +29,14 @@ def test_audio_path_cannot_escape_allowed_roots(tmp_path):
     assert error.value.code == "not_found"
 
 
+def test_audio_path_accepts_url_encoded_entry_id(tmp_path):
+    (tmp_path / "voices").mkdir()
+    (tmp_path / "voices" / "Bell.wav").write_bytes(b"bell")
+    catalog = make_catalog(tmp_path)
+
+    assert catalog.audio_path("builtin%3ABell.wav") == (tmp_path / "voices" / "Bell.wav").resolve()
+
+
 def test_lists_entries_with_search_source_filter_and_missing_configured_file(tmp_path):
     (tmp_path / "voices").mkdir()
     (tmp_path / "voices" / "Builtin.wav").write_bytes(b"builtin")
