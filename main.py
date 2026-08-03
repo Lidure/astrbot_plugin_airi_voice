@@ -813,7 +813,7 @@ class AiriVoice(Star):
         self._update_sorted_keys()
 
     def web_request_is_admin(self, username: Optional[str]) -> bool:
-        """Apply the trusted AstrBot Dashboard identity boundary to admin policy."""
+        """Apply the config-backed trusted AstrBot Dashboard identity boundary."""
 
         return dashboard_request_is_admin(self, username)
 

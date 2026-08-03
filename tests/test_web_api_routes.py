@@ -320,7 +320,7 @@ def test_registration_registers_public_routes_and_swallows_route_registration_fa
     assert failed.api_registered is False
 
 
-def test_dashboard_admin_mode_accepts_only_nonempty_authenticated_username():
+def test_dashboard_admin_mode_requires_configured_webui_username():
     from web_api import dashboard_request_is_admin
 
     class Policy:
@@ -330,10 +330,30 @@ def test_dashboard_admin_mode_accepts_only_nonempty_authenticated_username():
             raise AssertionError("admin-mode Dashboard identity must use trusted username")
 
     policy = Policy()
+    policy.config = {"webui_admin_users": ["dashboard-user"]}
 
     assert dashboard_request_is_admin(policy, "dashboard-user") is True
+    assert dashboard_request_is_admin(policy, "other-user") is False
     assert dashboard_request_is_admin(policy, "  ") is False
     assert dashboard_request_is_admin(policy, None) is False
+
+
+@pytest.mark.parametrize(
+    "config",
+    [None, {}, {"webui_admin_users": "dashboard-user"}, {"webui_admin_users": ["dashboard-user", 7]}],
+)
+def test_dashboard_admin_mode_denies_missing_or_invalid_webui_allowlist(config):
+    from web_api import dashboard_request_is_admin
+
+    class Policy:
+        admin_mode = "admin"
+        _check_admin = lambda self, event: True
+
+    policy = Policy()
+    if config is not None:
+        policy.config = config
+
+    assert dashboard_request_is_admin(policy, "dashboard-user") is False
 
 
 def test_dashboard_all_and_whitelist_modes_keep_existing_semantics():

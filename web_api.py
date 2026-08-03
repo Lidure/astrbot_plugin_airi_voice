@@ -66,13 +66,22 @@ def dashboard_request_is_admin(plugin: Any, username: Any) -> bool:
     """Apply chat admin policy to a trusted authenticated Dashboard username.
 
     AstrBot supplies ``request.username`` only from its authenticated Plugin
-    Pages context. In ``admin`` mode, a non-empty username is therefore the
-    Dashboard's admin boundary; an absent username is never accepted. The
-    existing plugin policy remains authoritative for ``all`` and ``whitelist``.
+    Pages context. In ``admin`` mode, the username must also be present in the
+    plugin config's ``webui_admin_users`` list; absent or malformed config is
+    denied. The existing plugin policy remains authoritative for ``all`` and
+    ``whitelist``.
     """
 
     if getattr(plugin, "admin_mode", None) == "admin":
-        return isinstance(username, str) and bool(username.strip())
+        if not isinstance(username, str) or not username.strip():
+            return False
+        config = getattr(plugin, "config", None)
+        webui_admin_users = config.get("webui_admin_users") if isinstance(config, dict) else None
+        if not isinstance(webui_admin_users, list):
+            return False
+        if any(not isinstance(user, str) for user in webui_admin_users):
+            return False
+        return username in webui_admin_users
     return bool(plugin._check_admin(_DashboardRequestEvent(username)))
 
 
