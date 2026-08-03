@@ -19,6 +19,7 @@ from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
+from web_api import register_web_features
 
 try:
     from astrbot.api.provider import ProviderRequest
@@ -684,6 +685,7 @@ class AiriVoice(Star):
         self._update_sorted_keys()
 
         self.last_pool_len = len(self.config.get("extra_voice_pool", []))
+        self.web_features = register_web_features(self.context, self)
 
         if self.trigger_mode == "llm":
             llm_tools = []
