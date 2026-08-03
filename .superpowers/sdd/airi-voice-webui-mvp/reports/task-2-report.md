@@ -27,3 +27,7 @@ exit 0
 ## Concern
 
 The Task 2 brief explicitly restricts catalog files to `.wav`, `.mp3`, `.ogg`, `.flac`, and `.m4a`. This is narrower than the older plan and historical helper allowlist, which mention `.silk` and `.amr`; catalog-managed `/voice.add` rejects those two formats to follow the brief exactly.
+
+## Reviewer follow-up: duplicate effective keywords
+
+`VoiceCatalog.refresh()` now rejects case-insensitive keyword collisions across every catalog source with `CatalogError("duplicate_keyword", ...)`. This prevents the old source-order overwrite from choosing a voice for ambiguous names. Tests cover builtin/user-added, builtin/extra, and user-added/extra collisions. Trigger parsing and handler semantics were not changed.

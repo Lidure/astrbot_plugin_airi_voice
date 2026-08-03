@@ -90,6 +90,33 @@ def test_rejects_invalid_extension_and_duplicate_effective_keyword(tmp_path):
     assert error.value.code == "duplicate_keyword"
 
 
+@pytest.mark.parametrize(
+    ("first_source", "second_source"),
+    [
+        ("builtin", "user_added"),
+        ("builtin", "extra_voices"),
+        ("user_added", "extra_voices"),
+    ],
+)
+def test_refresh_rejects_case_insensitive_keywords_colliding_across_sources(
+    tmp_path, first_source, second_source
+):
+    roots = {
+        "builtin": tmp_path / "voices",
+        "user_added": tmp_path / "data" / "user_added",
+        "extra_voices": tmp_path / "data" / "extra_voices",
+    }
+    roots[first_source].mkdir(parents=True)
+    roots[second_source].mkdir(parents=True, exist_ok=True)
+    (roots[first_source] / "Alert.wav").write_bytes(b"first")
+    (roots[second_source] / "aLeRt.ogg").write_bytes(b"second")
+
+    with pytest.raises(CatalogError) as error:
+        make_catalog(tmp_path)
+
+    assert error.value.code == "duplicate_keyword"
+
+
 def test_deletes_user_file_and_rejects_builtin_deletion(tmp_path):
     (tmp_path / "voices").mkdir()
     (tmp_path / "voices" / "Built.wav").write_bytes(b"builtin")

@@ -69,6 +69,18 @@ class VoiceCatalog:
             if entry is not None:
                 entries.setdefault(entry.id, entry)
 
+        effective_keywords: dict[str, VoiceEntry] = {}
+        for entry in sorted(
+            entries.values(), key=lambda item: (item.name.casefold(), item.source, item.id)
+        ):
+            existing = effective_keywords.get(entry.name.casefold())
+            if existing is not None:
+                raise CatalogError(
+                    "duplicate_keyword",
+                    f"duplicate effective keyword: {existing.id} and {entry.id}",
+                )
+            effective_keywords[entry.name.casefold()] = entry
+
         self._entries = entries
         voice_map: dict[str, str] = {}
         for source in SOURCES:
