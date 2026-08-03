@@ -18,3 +18,7 @@
 ## Parser changes
 
 None. The new parser-only regression matrix passed against the existing parser integration. No chat-platform manual verification was performed.
+
+## Base commit
+
+The matrix and report were introduced in commit `9a3a6578fd11f310277bcc7f94f3e55ce7a7ac25`.
