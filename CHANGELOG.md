@@ -6,6 +6,8 @@
 
 ## [2.8.0] - 2026-08-03
 
+- WebUI 上传继续支持历史 `.silk` / `.amr` 格式，并补充支持 `.flac` / `.m4a`；Plugin Page 入口位于 `pages/airi-voice/index.html`。
+
 ### ✨ WebUI 语音管理 MVP
 
 - 新增基于安全语音目录的 Dashboard 路由和管理页面，支持目录浏览、搜索、筛选、试听、上传、删除与重载。

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a"}
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".silk", ".amr", ".flac", ".m4a"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SOURCES = ("builtin", "user_added", "extra_voices")
 

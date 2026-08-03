@@ -8,6 +8,8 @@ Completed the documentation handoff. Automated verification passed; all AstrBot 
 
 - Verification handoff: `docs/superpowers/verification/2026-08-03-airi-voice-webui-mvp.md`
 
+Follow-up corrections preserve historical `.silk` / `.amr` upload support, add `.flac` / `.m4a`, and place the Plugin Page under `pages/airi-voice/index.html` for AstrBot discovery. The manual Dashboard checklist remains pending; no live Dashboard verification is claimed.
+
 ## Checks run
 
 - `python -m py_compile main.py web_api.py voice_catalog.py request_parser.py`: passed.

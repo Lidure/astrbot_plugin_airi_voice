@@ -21,14 +21,14 @@ from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 from web_api import dashboard_request_is_admin, register_web_features
 from request_parser import parse_request
-from voice_catalog import CatalogError, VoiceCatalog
+from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 
 try:
     from astrbot.api.provider import ProviderRequest
 except Exception:
     ProviderRequest = Any
 
-ALLOWED_EXT = {".mp3", ".wav", ".ogg", ".silk", ".amr"}
+ALLOWED_EXT = ALLOWED_EXTENSIONS
 PAGE_SIZE = 15
 IMAGE_PAGE_SIZE = 42          # 图片模式每页显示数量
 FONT_SIZE = 28

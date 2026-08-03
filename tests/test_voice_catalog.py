@@ -68,6 +68,16 @@ def test_saves_valid_upload_at_exact_size_boundary(tmp_path):
     assert catalog.audio_path(entry.id).read_bytes() == data
 
 
+@pytest.mark.parametrize("extension", (".silk", ".amr", ".flac", ".m4a"))
+def test_saves_all_supported_upload_extensions(tmp_path, extension):
+    catalog = make_catalog(tmp_path)
+
+    entry = catalog.save_upload(f"sample{extension}", "Sample", b"audio")
+
+    assert entry.extension == extension
+    assert catalog.audio_path(entry.id).suffix == extension
+
+
 def test_saves_user_added_voice_for_voice_add_compatibility(tmp_path):
     catalog = make_catalog(tmp_path)
 

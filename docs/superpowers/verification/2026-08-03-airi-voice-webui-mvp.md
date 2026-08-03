@@ -6,7 +6,7 @@ Date: 2026-08-03
 
 - Release target: v2.8.0
 - Branch: `feature/airi-voice-webui-mvp`
-- Implemented commit range: `d10add3..a77498de4fe1668ec6f42f24cb15456021fbe600`
+- Implemented commit range: `d10add3..a77498de4fe1668ec6f42f24cb15456021fbe600`, with follow-up verification fixes through the current branch tip
 - Target AstrBot version: **PENDING** (no AstrBot runtime is available in this workspace)
 
 ## Automated verification
@@ -34,7 +34,7 @@ All cases below are **PENDING**. They require a Plugin Pages-capable AstrBot, an
 | Page discovery and load | PENDING | Reload the plugin, open its Dashboard Plugin Page, and confirm Airi Voice appears and loads without browser-console errors. |
 | List, search, and source filter | PENDING | Confirm the initial list; search a known keyword; filter `builtin`, `user_added`, and `extra_voices`; confirm totals and rows update. |
 | Audio preview | PENDING | Preview an existing playable item and confirm the controlled audio URL plays the intended file. |
-| Upload, filename-derived keyword | PENDING | Upload one allowed `.wav`, `.mp3`, `.ogg`, `.flac`, or `.m4a` file without changing the suggested keyword; confirm it appears under `extra_voices`. `.silk` and `.amr` are historical formats and unsupported by the current catalog-managed upload path. |
+| Upload, filename-derived keyword | PENDING | Upload one allowed `.wav`, `.mp3`, `.ogg`, `.silk`, `.amr`, `.flac`, or `.m4a` file without changing the suggested keyword; confirm it appears under `extra_voices`. |
 | Upload, edited keyword | PENDING | Upload an allowed fixture with an edited safe keyword; confirm that exact keyword is listed. |
 | Plugin Pages bridge upload route | PENDING | In the live Plugin Pages page, verify the upload uses `bridge.upload("voices/upload/<encoded-keyword>", file)` and reaches the keyword-bearing upload route successfully. |
 | Duplicate keyword rejection | PENDING | Attempt to upload a file with an effective keyword already present; confirm a stable validation error and no new file. |

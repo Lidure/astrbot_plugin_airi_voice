@@ -216,9 +216,9 @@ git commit -m "feat: add voice management web routes"
 ### Task 4: Build the static Plugin Page
 
 **Files:**
-- Create: `pages/index.html`
-- Create: `pages/app.js`
-- Create: `pages/style.css`
+- Create: `pages/airi-voice/index.html`
+- Create: `pages/airi-voice/app.js`
+- Create: `pages/airi-voice/style.css`
 - Create: `tests/test_page_assets.py`
 
 **Interfaces:**
@@ -232,7 +232,7 @@ git commit -m "feat: add voice management web routes"
 from pathlib import Path
 
 def test_page_assets_exist_and_reference_each_other():
-    page = Path("pages/index.html").read_text(encoding="utf-8")
+    page = Path("pages/airi-voice/index.html").read_text(encoding="utf-8")
     assert 'src="app.js"' in page
     assert 'href="style.css"' in page
     assert "Airi Voice" in page
