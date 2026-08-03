@@ -135,8 +135,11 @@ class VoiceManagementRoutes:
     async def list_voices(self) -> Any:
         try:
             query = self._web().request.query
+            source = query.get("source")
+            if isinstance(source, str):
+                source = source.strip() or None
             entries = self.plugin.catalog.list_entries(
-                query=query.get("q", ""), source=query.get("source")
+                query=query.get("q", ""), source=source
             )
             items = [self._entry_json(entry) for entry in entries]
             return self._json({"items": items, "total": len(items)})

@@ -155,6 +155,15 @@ def test_list_returns_only_public_metadata_and_query_filters():
     assert plugin.catalog.calls == [("list", "ell", "builtin")]
 
 
+def test_list_treats_empty_source_filter_as_all_sources():
+    routes, plugin = make_routes(FakeRequest(query={"q": "", "source": ""}))
+
+    response = run(routes.list_voices)
+
+    assert response["status"] == 200
+    assert plugin.catalog.calls == [("list", "", None)]
+
+
 def test_audio_uses_file_response_and_never_returns_path_json():
     routes, plugin = make_routes(FakeRequest())
 
