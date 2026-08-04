@@ -158,7 +158,7 @@ class VoiceManagementRoutes:
                 {
                     "filename": path.name,
                     "content_type": content_type,
-                    "data": base64.b64encode(path.read_bytes()).decode("ascii"),
+                    "audio_base64": base64.b64encode(path.read_bytes()).decode("ascii"),
                 }
             )
         except CatalogError as error:
