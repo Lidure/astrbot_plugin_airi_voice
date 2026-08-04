@@ -48,6 +48,32 @@
         <audio id="audio-player" controls preload="metadata"></audio>
       </section>
 
+      <section class="panel" aria-labelledby="upload-heading">
+        <div class="panel-heading">
+          <div>
+            <h2 id="upload-heading">上传新语音</h2>
+            <p>填写触发关键词并选择一个音频文件；服务器会验证格式、大小和重复名称。</p>
+          </div>
+        </div>
+        <form id="upload-form">
+          <div class="upload-fields upload-grid">
+            <label>
+              触发关键词
+              <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
+            </label>
+            <label class="upload-file-field">
+              音频文件
+              <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*">
+              <small>Supported formats: .wav, .mp3, .ogg, .silk, .amr, .flac, .m4a</small>
+            </label>
+          </div>
+          <div class="upload-actions">
+            <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>
+            <button type="submit" class="button" data-mutation>上传语音</button>
+          </div>
+        </form>
+      </section>
+
       <section class="panel" aria-labelledby="browse-heading">
         <div class="panel-heading">
           <div>
@@ -86,31 +112,6 @@
         </div>
       </section>
 
-      <section class="panel" aria-labelledby="upload-heading">
-        <div class="panel-heading">
-          <div>
-            <h2 id="upload-heading">上传新语音</h2>
-            <p>填写触发关键词并选择一个音频文件；服务器会验证格式、大小和重复名称。</p>
-          </div>
-        </div>
-        <form id="upload-form">
-          <div class="upload-fields upload-grid">
-            <label>
-              触发关键词
-              <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
-            </label>
-            <label class="upload-file-field">
-              音频文件
-              <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*">
-              <small>Supported formats: .wav, .mp3, .ogg, .silk, .amr, .flac, .m4a</small>
-            </label>
-          </div>
-          <div class="upload-actions">
-            <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>
-            <button type="submit" class="button" data-mutation>上传语音</button>
-          </div>
-        </form>
-      </section>
     </main>
 
     <dialog id="delete-dialog" aria-labelledby="delete-title">

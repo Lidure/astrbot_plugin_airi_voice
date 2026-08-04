@@ -59,6 +59,7 @@ def test_voice_page_supports_fixed_feedback_and_bridge_compatible_delete():
 
     assert 'id="error-message"' in page
     assert 'id="upload-form"' in page
+    assert page.index('aria-labelledby="upload-heading"') < page.index('aria-labelledby="browse-heading"')
     assert 'bridge().apiPost(`voices/${encodeURIComponent(voiceId)}/delete`)' in script
     assert "apiDelete" not in script
     assert "position: fixed" in styles
