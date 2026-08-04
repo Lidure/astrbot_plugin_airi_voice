@@ -71,8 +71,10 @@ def test_voice_page_has_compact_player_toggle_and_upload_card_contract():
     styles = Path("pages/airi-voice/style.css").read_text(encoding="utf-8")
 
     assert 'id="audio-player-toggle"' in page
+    assert 'id="audio-player-mini-play"' in page
     assert 'class="upload-actions"' in page
     assert "is-mini" in script
     assert ".audio-player-card.is-mini" in styles
+    assert ".audio-player-card.is-mini #audio-player" in styles
     assert "is-expanded" not in script
     assert ".upload-actions" in styles

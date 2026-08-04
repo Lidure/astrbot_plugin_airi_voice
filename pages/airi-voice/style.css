@@ -93,11 +93,15 @@ h2 { margin-bottom: .3rem; font-size: 1.25rem; letter-spacing: -.015em; }
   left: auto;
   right: 1rem;
   bottom: 6rem;
-  width: min(240px, calc(100% - 2rem));
+  width: min(210px, calc(100% - 2rem));
   transform: none;
   gap: .5rem;
-  padding: .65rem .8rem;
+  padding: .5rem .65rem;
 }
+.audio-player-card.is-mini #audio-player { display: none; }
+.audio-player-card.is-mini .audio-player-heading h2 { margin-bottom: 0; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.audio-player-card.is-mini .audio-player-actions .button { padding: .32rem .48rem; font-size: .75rem; }
+.audio-player-card.is-mini .audio-player-actions .button:first-child { flex: 0 0 auto; }
 .audio-player-card.is-mini .audio-player-source,
 .audio-player-card.is-mini .eyebrow { display: none; }
 .audio-player-card.is-mini .audio-player-heading { align-items: center; }
@@ -187,7 +191,7 @@ dialog::backdrop { background: rgb(15 19 32 / .58); backdrop-filter: blur(2px); 
   .panel, .audio-player-card { padding: 1rem; }
   .audio-player-card { width: calc(100% - 1rem); bottom: .5rem; }
   .audio-player-card:not(.is-mini) { width: calc(100% - 1rem); padding: 1rem; }
-  .audio-player-card.is-mini { right: .5rem; bottom: 5rem; width: min(240px, calc(100% - 1rem)); }
+  .audio-player-card.is-mini { right: .5rem; bottom: 5rem; width: min(210px, calc(100% - 1rem)); }
   .audio-player-heading { align-items: stretch; }
   .audio-player-actions { width: 100%; }
   .audio-player-actions .button { flex: 1; }

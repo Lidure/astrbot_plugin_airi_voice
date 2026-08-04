@@ -24,6 +24,7 @@
     audioTitle: document.getElementById("audio-player-title"),
     audioSource: document.getElementById("audio-player-source"),
     audio: document.getElementById("audio-player"),
+    audioMiniPlay: document.getElementById("audio-player-mini-play"),
     audioToggle: document.getElementById("audio-player-toggle"),
     audioClose: document.getElementById("audio-player-close"),
     deleteDialog: document.getElementById("delete-dialog"),
@@ -131,6 +132,12 @@
     elements.audioCard.classList.toggle("is-mini", mini);
     elements.audioToggle.setAttribute("aria-expanded", String(!mini));
     elements.audioToggle.textContent = mini ? "展开" : "收起";
+  }
+
+  function updateMiniPlayLabel() {
+    const playing = !elements.audio.paused && !elements.audio.ended;
+    elements.audioMiniPlay.textContent = playing ? "暂停" : "播放";
+    elements.audioMiniPlay.setAttribute("aria-label", playing ? "暂停播放" : "开始播放");
   }
 
   function makeButton(label, className, callback, disabled = false) {
@@ -299,6 +306,14 @@
   elements.audioToggle.addEventListener("click", () => {
     setPlayerMini(!elements.audioCard.classList.contains("is-mini"));
   });
+  elements.audioMiniPlay.addEventListener("click", async () => {
+    if (elements.audio.paused) await elements.audio.play();
+    else elements.audio.pause();
+    updateMiniPlayLabel();
+  });
+  elements.audio.addEventListener("play", updateMiniPlayLabel);
+  elements.audio.addEventListener("pause", updateMiniPlayLabel);
+  elements.audio.addEventListener("ended", updateMiniPlayLabel);
   elements.audioClose.addEventListener("click", () => stopCurrentAudio({ hide: true }));
   window.addEventListener("beforeunload", () => stopCurrentAudio());
 
