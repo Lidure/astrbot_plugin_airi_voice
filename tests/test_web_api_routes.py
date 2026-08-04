@@ -175,7 +175,7 @@ def test_audio_uses_file_response_and_never_returns_path_json():
     assert response["status"] == 200
     assert response["body"]["filename"] == "test_web_api_routes.py"
     assert response["body"]["content_type"] == "text/x-python"
-    assert response["body"]["audio_base64"]
+    assert response["body"]["audio_hex"]
     assert plugin.catalog.calls == [("audio", "builtin:Bell.wav")]
 
 

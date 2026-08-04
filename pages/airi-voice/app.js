@@ -68,13 +68,13 @@
   }
 
   function extractAudioPayload(value) {
-    if (typeof value === "string") return { audio_base64: value };
+    if (typeof value === "string") return { audio_hex: value };
     if (!value || typeof value !== "object") return null;
     if (value.status === "error") {
       throw new Error(value.message || "音频接口返回错误");
     }
-    if (typeof value.audio_base64 === "string") {
-      return { audio_base64: value.audio_base64, content_type: value.content_type || value.contentType };
+    if (typeof value.audio_hex === "string") {
+      return { audio_hex: value.audio_hex, content_type: value.content_type || value.contentType };
     }
     for (const key of ["data", "body", "result", "payload"]) {
       const nested = extractAudioPayload(value[key]);
@@ -209,13 +209,14 @@
     try {
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
       const payload = extractAudioPayload(await readResponse(response));
-      if (!payload || typeof payload.audio_base64 !== "string") throw new Error("音频数据无效");
-      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload.audio_base64) || payload.audio_base64.length % 4 !== 0) {
-        throw new Error("音频响应不是有效的 Base64 数据");
+      if (!payload || typeof payload.audio_hex !== "string") throw new Error("音频数据无效");
+      if (!/^[0-9a-f]*$/i.test(payload.audio_hex) || payload.audio_hex.length % 2 !== 0) {
+        throw new Error("音频响应不是有效的音频数据");
       }
-      const binary = atob(payload.audio_base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const bytes = new Uint8Array(payload.audio_hex.length / 2);
+      for (let index = 0; index < bytes.length; index += 1) {
+        bytes[index] = Number.parseInt(payload.audio_hex.slice(index * 2, index * 2 + 2), 16);
+      }
       const blob = new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);

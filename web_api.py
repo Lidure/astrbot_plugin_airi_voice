@@ -5,7 +5,6 @@ older AstrBot versions can still load the chat plugin without WebUI support.
 """
 
 from dataclasses import dataclass
-import base64
 import inspect
 import logging
 import mimetypes
@@ -158,7 +157,7 @@ class VoiceManagementRoutes:
                 {
                     "filename": path.name,
                     "content_type": content_type,
-                    "audio_base64": base64.b64encode(path.read_bytes()).decode("ascii"),
+                    "audio_hex": path.read_bytes().hex(),
                 }
             )
         except CatalogError as error:
