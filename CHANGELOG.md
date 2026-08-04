@@ -4,6 +4,14 @@
 
 ---
 
+## [2.9.0] - 2026-08-04
+
+### Added
+
+- Added a shared voice preview player with pause and seek controls.
+- Automatically switches the active player when another voice preview starts.
+- Refreshed the voice management page visuals and playback status presentation.
+
 ## [2.8.10] - 2026-08-04
 
 ### 修复
