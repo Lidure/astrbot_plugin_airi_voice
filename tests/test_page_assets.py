@@ -28,3 +28,14 @@ def test_voice_preview_uses_the_shared_player_cleanup_contract():
     assert "URL.revokeObjectURL" in script
     assert "audio.pause()" in script
     assert 'elements.audioClose.addEventListener("click"' in script
+
+
+def test_voice_preview_ignores_stale_requests_and_exposes_stop_interface():
+    """Catch an older preview response replacing the current shared player."""
+    script = Path("pages/airi-voice/app.js").read_text(encoding="utf-8")
+
+    assert "let previewRequestVersion = 0" in script
+    assert "const requestVersion = ++previewRequestVersion" in script
+    assert script.count("if (!isCurrentPreviewRequest(requestVersion)) return;") >= 4
+    assert "function stopCurrentAudio" in script
+    assert "playVoice, stopCurrentAudio" in script

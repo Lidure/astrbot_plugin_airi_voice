@@ -5,6 +5,7 @@
   let pendingDeleteId = null;
   let currentAudioUrl = null;
   let currentVoice = null;
+  let previewRequestVersion = 0;
 
   const elements = {
     error: document.getElementById("error-message"),
@@ -100,7 +101,7 @@
     return null;
   }
 
-  function clearAudioPlayer({ hide = false } = {}) {
+  function stopCurrentAudio({ hide = false } = {}) {
     const audio = elements.audio;
     audio.pause();
     audio.removeAttribute("src");
@@ -111,8 +112,12 @@
     if (hide) elements.audioCard.hidden = true;
   }
 
+  function isCurrentPreviewRequest(requestVersion) {
+    return requestVersion === previewRequestVersion;
+  }
+
   function showAudioPlayer(item, url) {
-    clearAudioPlayer();
+    stopCurrentAudio();
     currentAudioUrl = url;
     currentVoice = item;
     elements.audio.src = url;
@@ -242,12 +247,15 @@
   }
 
   async function playVoice(item) {
-    clearAudioPlayer({ hide: true });
+    const requestVersion = ++previewRequestVersion;
+    stopCurrentAudio({ hide: true });
     setLoading(true, "正在获取音频预览…");
     showError(null);
     try {
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       const payload = extractAudioPayload(await readResponse(response));
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       if (!payload || typeof payload.audio_hex !== "string") throw new Error("音频数据无效");
       if (!/^[0-9a-f]*$/i.test(payload.audio_hex) || payload.audio_hex.length % 2 !== 0) {
         throw new Error("音频响应不是有效的音频数据");
@@ -256,17 +264,20 @@
       for (let index = 0; index < bytes.length; index += 1) {
         bytes[index] = Number.parseInt(payload.audio_hex.slice(index * 2, index * 2 + 2), 16);
       }
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       const blob = new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       showAudioPlayer(item, url);
       await elements.audio.play();
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       elements.status.textContent = `正在试听：${item.name || "语音"}。`;
     } catch (error) {
-      clearAudioPlayer({ hide: true });
+      if (!isCurrentPreviewRequest(requestVersion)) return;
+      stopCurrentAudio({ hide: true });
       showError(error);
       elements.status.textContent = "无法播放该语音。";
     } finally {
-      setLoading(false);
+      if (isCurrentPreviewRequest(requestVersion)) setLoading(false);
     }
   }
 
@@ -276,11 +287,11 @@
   elements.uploadForm.addEventListener("submit", uploadVoice);
   elements.confirmDelete.addEventListener("click", (event) => { event.preventDefault(); deleteVoice(); });
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
-  elements.audio.addEventListener("ended", () => clearAudioPlayer({ hide: true }));
-  elements.audio.addEventListener("error", () => clearAudioPlayer({ hide: true }));
-  elements.audioClose.addEventListener("click", () => clearAudioPlayer({ hide: true }));
-  window.addEventListener("beforeunload", () => clearAudioPlayer());
+  elements.audio.addEventListener("ended", () => stopCurrentAudio({ hide: true }));
+  elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }));
+  elements.audioClose.addEventListener("click", () => stopCurrentAudio({ hide: true }));
+  window.addEventListener("beforeunload", () => stopCurrentAudio());
 
-  window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice };
+  window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice, stopCurrentAudio };
   loadVoices();
 })();
