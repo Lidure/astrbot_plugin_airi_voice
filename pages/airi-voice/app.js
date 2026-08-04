@@ -3,6 +3,8 @@
 
   const state = { items: [], query: "", source: "", loading: false, error: "" };
   let pendingDeleteId = null;
+  let currentAudioUrl = null;
+  let currentVoice = null;
 
   const elements = {
     error: document.getElementById("error-message"),
@@ -17,6 +19,11 @@
     uploadForm: document.getElementById("upload-form"),
     keyword: document.getElementById("keyword-input"),
     file: document.getElementById("file-input"),
+    audioCard: document.getElementById("audio-player-card"),
+    audioTitle: document.getElementById("audio-player-title"),
+    audioSource: document.getElementById("audio-player-source"),
+    audio: document.getElementById("audio-player"),
+    audioClose: document.getElementById("audio-player-close"),
     deleteDialog: document.getElementById("delete-dialog"),
     deleteDescription: document.getElementById("delete-description"),
     confirmDelete: document.getElementById("confirm-delete-button"),
@@ -91,6 +98,27 @@
       if (nested) return nested;
     }
     return null;
+  }
+
+  function clearAudioPlayer({ hide = false } = {}) {
+    const audio = elements.audio;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+    currentVoice = null;
+    if (hide) elements.audioCard.hidden = true;
+  }
+
+  function showAudioPlayer(item, url) {
+    clearAudioPlayer();
+    currentAudioUrl = url;
+    currentVoice = item;
+    elements.audio.src = url;
+    elements.audioTitle.textContent = item.name || "未命名语音";
+    elements.audioSource.textContent = sourceLabel(item.source);
+    elements.audioCard.hidden = false;
   }
 
   function makeButton(label, className, callback, disabled = false) {
@@ -214,6 +242,7 @@
   }
 
   async function playVoice(item) {
+    clearAudioPlayer({ hide: true });
     setLoading(true, "正在获取音频预览…");
     showError(null);
     try {
@@ -229,12 +258,11 @@
       }
       const blob = new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
-      audio.addEventListener("error", () => URL.revokeObjectURL(url), { once: true });
-      await audio.play();
+      showAudioPlayer(item, url);
+      await elements.audio.play();
       elements.status.textContent = `正在试听：${item.name || "语音"}。`;
     } catch (error) {
+      clearAudioPlayer({ hide: true });
       showError(error);
       elements.status.textContent = "无法播放该语音。";
     } finally {
@@ -248,6 +276,10 @@
   elements.uploadForm.addEventListener("submit", uploadVoice);
   elements.confirmDelete.addEventListener("click", (event) => { event.preventDefault(); deleteVoice(); });
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
+  elements.audio.addEventListener("ended", () => clearAudioPlayer({ hide: true }));
+  elements.audio.addEventListener("error", () => clearAudioPlayer({ hide: true }));
+  elements.audioClose.addEventListener("click", () => clearAudioPlayer({ hide: true }));
+  window.addEventListener("beforeunload", () => clearAudioPlayer());
 
   window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice };
   loadVoices();

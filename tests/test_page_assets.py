@@ -18,3 +18,13 @@ def test_page_assets_exist_and_reference_each_other():
     assert '<p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>' in page
     assert (page_root / "style.css").is_file()
     assert (page_root / "app.js").is_file()
+
+
+def test_voice_preview_uses_the_shared_player_cleanup_contract():
+    """Catch previews that bypass the page player or leak their Blob URLs."""
+    script = Path("pages/airi-voice/app.js").read_text(encoding="utf-8")
+
+    assert 'document.getElementById("audio-player")' in script
+    assert "URL.revokeObjectURL" in script
+    assert "audio.pause()" in script
+    assert 'elements.audioClose.addEventListener("click"' in script
