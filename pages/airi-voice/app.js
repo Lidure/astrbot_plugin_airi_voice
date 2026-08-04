@@ -3,6 +3,9 @@
 
   const state = { items: [], query: "", source: "", loading: false, error: "" };
   let pendingDeleteId = null;
+  let currentAudioUrl = null;
+  let currentVoice = null;
+  let previewRequestVersion = 0;
 
   const elements = {
     error: document.getElementById("error-message"),
@@ -17,6 +20,11 @@
     uploadForm: document.getElementById("upload-form"),
     keyword: document.getElementById("keyword-input"),
     file: document.getElementById("file-input"),
+    audioCard: document.getElementById("audio-player-card"),
+    audioTitle: document.getElementById("audio-player-title"),
+    audioSource: document.getElementById("audio-player-source"),
+    audio: document.getElementById("audio-player"),
+    audioClose: document.getElementById("audio-player-close"),
     deleteDialog: document.getElementById("delete-dialog"),
     deleteDescription: document.getElementById("delete-description"),
     confirmDelete: document.getElementById("confirm-delete-button"),
@@ -91,6 +99,31 @@
       if (nested) return nested;
     }
     return null;
+  }
+
+  function stopCurrentAudio({ hide = false } = {}) {
+    const audio = elements.audio;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+    currentVoice = null;
+    if (hide) elements.audioCard.hidden = true;
+  }
+
+  function isCurrentPreviewRequest(requestVersion) {
+    return requestVersion === previewRequestVersion;
+  }
+
+  function showAudioPlayer(item, url) {
+    stopCurrentAudio();
+    currentAudioUrl = url;
+    currentVoice = item;
+    elements.audio.src = url;
+    elements.audioTitle.textContent = item.name || "未命名语音";
+    elements.audioSource.textContent = sourceLabel(item.source);
+    elements.audioCard.hidden = false;
   }
 
   function makeButton(label, className, callback, disabled = false) {
@@ -214,11 +247,15 @@
   }
 
   async function playVoice(item) {
+    const requestVersion = ++previewRequestVersion;
+    stopCurrentAudio({ hide: true });
     setLoading(true, "正在获取音频预览…");
     showError(null);
     try {
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       const payload = extractAudioPayload(await readResponse(response));
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       if (!payload || typeof payload.audio_hex !== "string") throw new Error("音频数据无效");
       if (!/^[0-9a-f]*$/i.test(payload.audio_hex) || payload.audio_hex.length % 2 !== 0) {
         throw new Error("音频响应不是有效的音频数据");
@@ -227,18 +264,20 @@
       for (let index = 0; index < bytes.length; index += 1) {
         bytes[index] = Number.parseInt(payload.audio_hex.slice(index * 2, index * 2 + 2), 16);
       }
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       const blob = new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
-      audio.addEventListener("error", () => URL.revokeObjectURL(url), { once: true });
-      await audio.play();
+      showAudioPlayer(item, url);
+      await elements.audio.play();
+      if (!isCurrentPreviewRequest(requestVersion)) return;
       elements.status.textContent = `正在试听：${item.name || "语音"}。`;
     } catch (error) {
+      if (!isCurrentPreviewRequest(requestVersion)) return;
+      stopCurrentAudio({ hide: true });
       showError(error);
       elements.status.textContent = "无法播放该语音。";
     } finally {
-      setLoading(false);
+      if (isCurrentPreviewRequest(requestVersion)) setLoading(false);
     }
   }
 
@@ -248,7 +287,11 @@
   elements.uploadForm.addEventListener("submit", uploadVoice);
   elements.confirmDelete.addEventListener("click", (event) => { event.preventDefault(); deleteVoice(); });
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
+  elements.audio.addEventListener("ended", () => stopCurrentAudio({ hide: true }));
+  elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }));
+  elements.audioClose.addEventListener("click", () => stopCurrentAudio({ hide: true }));
+  window.addEventListener("beforeunload", () => stopCurrentAudio());
 
-  window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice };
+  window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice, stopCurrentAudio };
   loadVoices();
 })();

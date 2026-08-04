@@ -11,5 +11,42 @@ def test_page_assets_exist_and_reference_each_other():
     assert "Airi Voice" in page
     assert 'accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*"' in page
     assert ".silk" in page and ".amr" in page
+    assert '<section id="audio-player-card" class="audio-player-card" hidden aria-labelledby="audio-player-title">' in page
+    assert '<audio id="audio-player" controls preload="metadata"></audio>' in page
+    assert 'id="audio-player-title"' in page
+    assert 'id="audio-player-source"' in page
+    assert '<p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>' in page
     assert (page_root / "style.css").is_file()
     assert (page_root / "app.js").is_file()
+
+
+def test_voice_preview_uses_the_shared_player_cleanup_contract():
+    """Catch previews that bypass the page player or leak their Blob URLs."""
+    script = Path("pages/airi-voice/app.js").read_text(encoding="utf-8")
+
+    assert 'document.getElementById("audio-player")' in script
+    assert "URL.revokeObjectURL" in script
+    assert "audio.pause()" in script
+    assert 'elements.audioClose.addEventListener("click"' in script
+
+
+def test_voice_preview_ignores_stale_requests_and_exposes_stop_interface():
+    """Catch an older preview response replacing the current shared player."""
+    script = Path("pages/airi-voice/app.js").read_text(encoding="utf-8")
+
+    assert "let previewRequestVersion = 0" in script
+    assert "const requestVersion = ++previewRequestVersion" in script
+    assert script.count("if (!isCurrentPreviewRequest(requestVersion)) return;") >= 4
+    assert "function stopCurrentAudio" in script
+    assert "playVoice, stopCurrentAudio" in script
+
+
+def test_voice_page_styles_define_player_and_responsive_contracts():
+    """Keep the player and voice-row visual affordances in the page stylesheet."""
+    styles = Path("pages/airi-voice/style.css").read_text(encoding="utf-8")
+
+    assert ".audio-player-card" in styles
+    assert ".audio-player-heading" in styles
+    assert "#audio-player" in styles
+    assert "tbody tr:hover" in styles
+    assert "@media (max-width: 640px)" in styles
