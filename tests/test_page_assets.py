@@ -27,7 +27,7 @@ def test_voice_preview_uses_the_shared_player_cleanup_contract():
     assert 'document.getElementById("audio-player")' in script
     assert "URL.revokeObjectURL" in script
     assert "audio.pause()" in script
-    assert 'elements.audioClose.addEventListener("click"' in script
+    assert 'elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }))' in script
 
 
 def test_voice_preview_ignores_stale_requests_and_exposes_stop_interface():
@@ -72,11 +72,14 @@ def test_voice_page_has_compact_player_toggle_and_upload_card_contract():
 
     assert 'id="audio-player-toggle"' in page
     assert 'id="audio-player-mini-play"' in page
+    assert 'id="audio-player-close"' not in page
     assert 'class="upload-actions"' in page
     assert "is-mini" in script
     assert ".audio-player-card.is-mini" in styles
     assert ".audio-player-card.is-mini #audio-player" in styles
     assert ".audio-player-card.is-mini .audio-player-actions" in styles
-    assert "grid-template-columns: repeat(3" in styles
+    assert "grid-template-columns: repeat(2" in styles
     assert "is-expanded" not in script
+    assert 'elements.audio.addEventListener("ended", () => stopCurrentAudio' not in script
+    assert "if (elements.audio.ended) elements.audio.currentTime = 0;" in script
     assert ".upload-actions" in styles

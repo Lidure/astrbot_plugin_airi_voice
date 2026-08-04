@@ -26,7 +26,6 @@
     audio: document.getElementById("audio-player"),
     audioMiniPlay: document.getElementById("audio-player-mini-play"),
     audioToggle: document.getElementById("audio-player-toggle"),
-    audioClose: document.getElementById("audio-player-close"),
     deleteDialog: document.getElementById("delete-dialog"),
     deleteDescription: document.getElementById("delete-description"),
     confirmDelete: document.getElementById("confirm-delete-button"),
@@ -301,12 +300,12 @@
   elements.uploadForm.addEventListener("submit", uploadVoice);
   elements.confirmDelete.addEventListener("click", (event) => { event.preventDefault(); deleteVoice(); });
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
-  elements.audio.addEventListener("ended", () => stopCurrentAudio({ hide: true }));
   elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }));
   elements.audioToggle.addEventListener("click", () => {
     setPlayerMini(!elements.audioCard.classList.contains("is-mini"));
   });
   elements.audioMiniPlay.addEventListener("click", async () => {
+    if (elements.audio.ended) elements.audio.currentTime = 0;
     if (elements.audio.paused) await elements.audio.play();
     else elements.audio.pause();
     updateMiniPlayLabel();
@@ -314,7 +313,6 @@
   elements.audio.addEventListener("play", updateMiniPlayLabel);
   elements.audio.addEventListener("pause", updateMiniPlayLabel);
   elements.audio.addEventListener("ended", updateMiniPlayLabel);
-  elements.audioClose.addEventListener("click", () => stopCurrentAudio({ hide: true }));
   window.addEventListener("beforeunload", () => stopCurrentAudio());
 
   window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice, stopCurrentAudio };

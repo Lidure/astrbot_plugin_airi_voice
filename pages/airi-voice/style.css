@@ -105,7 +105,7 @@ h2 { margin-bottom: .3rem; font-size: 1.25rem; letter-spacing: -.015em; }
 .audio-player-card.is-mini .audio-player-source,
 .audio-player-card.is-mini .eyebrow { display: none; }
 .audio-player-card.is-mini .audio-player-heading { display: grid; grid-template-columns: minmax(0, 1fr); gap: .55rem; align-items: stretch; }
-.audio-player-card.is-mini .audio-player-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.audio-player-card.is-mini .audio-player-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
 .audio-player-card.is-mini .audio-player-actions .button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .error-message {
   position: fixed;
