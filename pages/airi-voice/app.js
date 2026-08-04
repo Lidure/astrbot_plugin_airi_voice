@@ -127,10 +127,10 @@
     elements.audioCard.hidden = false;
   }
 
-  function setPlayerExpanded(expanded) {
-    elements.audioCard.classList.toggle("is-expanded", expanded);
-    elements.audioToggle.setAttribute("aria-expanded", String(expanded));
-    elements.audioToggle.textContent = expanded ? "收起" : "展开";
+  function setPlayerMini(mini) {
+    elements.audioCard.classList.toggle("is-mini", mini);
+    elements.audioToggle.setAttribute("aria-expanded", String(!mini));
+    elements.audioToggle.textContent = mini ? "展开" : "收起";
   }
 
   function makeButton(label, className, callback, disabled = false) {
@@ -297,7 +297,7 @@
   elements.audio.addEventListener("ended", () => stopCurrentAudio({ hide: true }));
   elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }));
   elements.audioToggle.addEventListener("click", () => {
-    setPlayerExpanded(!elements.audioCard.classList.contains("is-expanded"));
+    setPlayerMini(!elements.audioCard.classList.contains("is-mini"));
   });
   elements.audioClose.addEventListener("click", () => stopCurrentAudio({ hide: true }));
   window.addEventListener("beforeunload", () => stopCurrentAudio());

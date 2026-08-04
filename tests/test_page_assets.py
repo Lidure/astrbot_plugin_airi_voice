@@ -11,7 +11,7 @@ def test_page_assets_exist_and_reference_each_other():
     assert "Airi Voice" in page
     assert 'accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*"' in page
     assert ".silk" in page and ".amr" in page
-    assert '<section id="audio-player-card" class="audio-player-card" hidden aria-labelledby="audio-player-title">' in page
+    assert '<section id="audio-player-card" class="audio-player-card is-mini" hidden aria-labelledby="audio-player-title">' in page
     assert '<audio id="audio-player" controls preload="metadata"></audio>' in page
     assert 'id="audio-player-title"' in page
     assert 'id="audio-player-source"' in page
@@ -72,6 +72,7 @@ def test_voice_page_has_compact_player_toggle_and_upload_card_contract():
 
     assert 'id="audio-player-toggle"' in page
     assert 'class="upload-actions"' in page
-    assert "is-expanded" in script
-    assert ".audio-player-card.is-expanded" in styles
+    assert "is-mini" in script
+    assert ".audio-player-card.is-mini" in styles
+    assert "is-expanded" not in script
     assert ".upload-actions" in styles
