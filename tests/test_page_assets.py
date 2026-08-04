@@ -76,5 +76,7 @@ def test_voice_page_has_compact_player_toggle_and_upload_card_contract():
     assert "is-mini" in script
     assert ".audio-player-card.is-mini" in styles
     assert ".audio-player-card.is-mini #audio-player" in styles
+    assert ".audio-player-card.is-mini .audio-player-actions" in styles
+    assert "grid-template-columns: repeat(3" in styles
     assert "is-expanded" not in script
     assert ".upload-actions" in styles

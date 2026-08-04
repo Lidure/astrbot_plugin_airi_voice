@@ -95,18 +95,18 @@ h2 { margin-bottom: .3rem; font-size: 1.25rem; letter-spacing: -.015em; }
   bottom: 6rem;
   width: min(210px, calc(100% - 2rem));
   transform: none;
-  gap: .5rem;
-  padding: .5rem .65rem;
+  gap: .65rem;
+  padding: .6rem .65rem;
+  min-height: 5.3rem;
 }
 .audio-player-card.is-mini #audio-player { display: none; }
 .audio-player-card.is-mini .audio-player-heading h2 { margin-bottom: 0; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .audio-player-card.is-mini .audio-player-actions .button { padding: .32rem .48rem; font-size: .75rem; }
-.audio-player-card.is-mini .audio-player-actions .button:first-child { flex: 0 0 auto; }
 .audio-player-card.is-mini .audio-player-source,
 .audio-player-card.is-mini .eyebrow { display: none; }
-.audio-player-card.is-mini .audio-player-heading { align-items: center; }
-.audio-player-card.is-mini .audio-player-actions { width: 100%; }
-.audio-player-card.is-mini .audio-player-actions .button:first-child { flex: 1; }
+.audio-player-card.is-mini .audio-player-heading { display: grid; grid-template-columns: minmax(0, 1fr); gap: .55rem; align-items: stretch; }
+.audio-player-card.is-mini .audio-player-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.audio-player-card.is-mini .audio-player-actions .button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .error-message {
   position: fixed;
   z-index: 21;
