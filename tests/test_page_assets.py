@@ -50,3 +50,16 @@ def test_voice_page_styles_define_player_and_responsive_contracts():
     assert "#audio-player" in styles
     assert "tbody tr:hover" in styles
     assert "@media (max-width: 640px)" in styles
+
+
+def test_voice_page_supports_fixed_feedback_and_bridge_compatible_delete():
+    page = Path("pages/airi-voice/index.html").read_text(encoding="utf-8")
+    script = Path("pages/airi-voice/app.js").read_text(encoding="utf-8")
+    styles = Path("pages/airi-voice/style.css").read_text(encoding="utf-8")
+
+    assert 'id="error-message"' in page
+    assert 'id="upload-form"' in page
+    assert 'bridge().apiPost(`voices/${encodeURIComponent(voiceId)}/delete`)' in script
+    assert "apiDelete" not in script
+    assert "position: fixed" in styles
+    assert ".upload-fields" in styles

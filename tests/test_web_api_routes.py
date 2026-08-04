@@ -337,6 +337,7 @@ def test_registration_registers_public_routes_and_swallows_route_registration_fa
         "/astrbot_plugin_airi_voice/voices/upload",
         "/astrbot_plugin_airi_voice/voices/upload/<keyword>",
         "/astrbot_plugin_airi_voice/voices/<voice_id>",
+        "/astrbot_plugin_airi_voice/voices/<voice_id>/delete",
         "/astrbot_plugin_airi_voice/voices/reload",
     ]
     assert failed.api_registered is False

@@ -37,7 +37,7 @@ def test_registers_a_discoverable_static_page_when_web_api_is_supported(tmp_path
 
     assert result.pages_registered is True
     assert result.api_registered is True
-    assert len(context.routes) == 6
+    assert len(context.routes) == 7
 
 
 def test_does_not_report_pages_registered_without_a_discoverable_index(tmp_path):

@@ -216,7 +216,7 @@
     setLoading(true, "正在删除语音…");
     showError(null);
     try {
-      const response = await bridge().apiDelete(`voices/${encodeURIComponent(voiceId)}`);
+      const response = await bridge().apiPost(`voices/${encodeURIComponent(voiceId)}/delete`);
       await readResponse(response);
       pendingDeleteId = null;
       elements.deleteDialog.close();

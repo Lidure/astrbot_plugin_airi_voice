@@ -239,6 +239,7 @@ def register_web_features(context: Any, plugin: Any) -> RegistrationResult:
             (f"/{PLUGIN_NAME}/voices/upload", routes.upload_voice, ["POST"], "Upload voice"),
             (f"/{PLUGIN_NAME}/voices/upload/<keyword>", routes.upload_voice, ["POST"], "Upload voice with keyword"),
             (f"/{PLUGIN_NAME}/voices/<voice_id>", routes.delete_voice, ["DELETE"], "Delete voice"),
+            (f"/{PLUGIN_NAME}/voices/<voice_id>/delete", routes.delete_voice, ["POST"], "Delete voice via Plugin Pages bridge"),
             (f"/{PLUGIN_NAME}/voices/reload", routes.reload_voices, ["POST"], "Reload voices"),
         ):
             register_web_api(route, handler, methods, description)

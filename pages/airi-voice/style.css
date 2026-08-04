@@ -34,6 +34,7 @@
 * { box-sizing: border-box; }
 body {
   margin: 0;
+  padding-bottom: 11rem;
   color: var(--text);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--accent-pink) 12%, transparent), transparent 28rem),
@@ -69,7 +70,12 @@ h2 { margin-bottom: .3rem; font-size: 1.25rem; letter-spacing: -.015em; }
 .panel-heading { padding-bottom: 1rem; border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
 
 .audio-player-card {
-  position: relative;
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: 1rem;
+  width: min(1120px, calc(100% - 2rem));
+  transform: translateX(-50%);
   display: grid;
   gap: 1.15rem;
   margin: 1.25rem 0;
@@ -83,12 +89,23 @@ h2 { margin-bottom: .3rem; font-size: 1.25rem; letter-spacing: -.015em; }
   background: var(--accent-gradient);
   content: "";
 }
+.error-message {
+  position: fixed;
+  z-index: 21;
+  left: 50%;
+  bottom: 1rem;
+  width: min(1120px, calc(100% - 2rem));
+  transform: translateX(-50%);
+}
+body:has(.audio-player-card:not([hidden])) .error-message { bottom: 10rem; }
 .audio-player-heading { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; padding-left: .25rem; }
 .audio-player-heading h2 { margin-bottom: .35rem; }
 .audio-player-source { margin-bottom: 0; }
 #audio-player { display: block; width: 100%; min-height: 2.8rem; accent-color: var(--accent-blue); }
 
-.filters, .upload-fields { align-items: end; flex-wrap: wrap; margin-top: 1rem; }
+.filters, .upload-fields { align-items: stretch; flex-wrap: wrap; margin-top: 1rem; }
+.upload-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#upload-form > .button { display: block; margin: 1rem 0 0 auto; min-width: 8rem; }
 label { display: grid; flex: 1 1 16rem; gap: .45rem; font-weight: 650; }
 input, select {
   width: 100%;
@@ -148,6 +165,8 @@ dialog::backdrop { background: rgb(15 19 32 / .58); backdrop-filter: blur(2px); 
   .page-header .button, .audio-player-heading .button { width: 100%; }
   .panel, .audio-player-card { padding: 1rem; }
   .filters, .upload-fields { display: grid; }
+  .upload-fields { grid-template-columns: 1fr; }
+  #upload-form > .button { width: 100%; }
   .table-wrap { border: 0; border-radius: 0; overflow: visible; }
   table { min-width: 0; }
   thead { display: none; }
