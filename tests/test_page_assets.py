@@ -39,3 +39,14 @@ def test_voice_preview_ignores_stale_requests_and_exposes_stop_interface():
     assert script.count("if (!isCurrentPreviewRequest(requestVersion)) return;") >= 4
     assert "function stopCurrentAudio" in script
     assert "playVoice, stopCurrentAudio" in script
+
+
+def test_voice_page_styles_define_player_and_responsive_contracts():
+    """Keep the player and voice-row visual affordances in the page stylesheet."""
+    styles = Path("pages/airi-voice/style.css").read_text(encoding="utf-8")
+
+    assert ".audio-player-card" in styles
+    assert ".audio-player-heading" in styles
+    assert "#audio-player" in styles
+    assert "tbody tr:hover" in styles
+    assert "@media (max-width: 640px)" in styles
