@@ -67,6 +67,19 @@
     return { builtin: "插件内置", user_added: "已上传", extra_voices: "额外目录" }[source] || "其他来源";
   }
 
+  function extractAudioPayload(value) {
+    if (typeof value === "string") return { data: value };
+    if (!value || typeof value !== "object") return null;
+    if (typeof value.data === "string") {
+      return { data: value.data, content_type: value.content_type || value.contentType };
+    }
+    for (const key of ["data", "body", "result", "payload"]) {
+      const nested = extractAudioPayload(value[key]);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
   function makeButton(label, className, callback, disabled = false) {
     const button = document.createElement("button");
     button.type = "button";
@@ -192,12 +205,7 @@
     showError(null);
     try {
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
-      let payload = await readResponse(response);
-      // AstrBot bridge versions differ: some unwrap {status: "ok", data},
-      // while others return the JSON body directly.
-      if (payload && payload.status === "ok" && payload.data && typeof payload.data === "object") {
-        payload = payload.data;
-      }
+      const payload = extractAudioPayload(await readResponse(response));
       if (!payload || typeof payload.data !== "string") throw new Error("音频数据无效");
       const binary = atob(payload.data);
       const bytes = new Uint8Array(binary.length);
