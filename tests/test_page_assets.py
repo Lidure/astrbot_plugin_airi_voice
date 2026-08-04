@@ -15,5 +15,6 @@ def test_page_assets_exist_and_reference_each_other():
     assert '<audio id="audio-player" controls preload="metadata"></audio>' in page
     assert 'id="audio-player-title"' in page
     assert 'id="audio-player-source"' in page
+    assert '<p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>' in page
     assert (page_root / "style.css").is_file()
     assert (page_root / "app.js").is_file()
