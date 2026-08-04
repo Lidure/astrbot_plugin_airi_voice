@@ -68,7 +68,17 @@
   }
 
   function extractAudioPayload(value) {
-    if (typeof value === "string") return { audio_hex: value };
+    if (typeof value === "string") {
+      const text = value.trim();
+      if (text.startsWith("{") || text.startsWith("[")) {
+        try {
+          return extractAudioPayload(JSON.parse(text));
+        } catch (_) {
+          // Fall through and let the caller show a clear invalid-payload error.
+        }
+      }
+      return { audio_hex: value };
+    }
     if (!value || typeof value !== "object") return null;
     if (value.status === "error") {
       throw new Error(value.message || "音频接口返回错误");
