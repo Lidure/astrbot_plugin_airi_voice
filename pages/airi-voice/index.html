@@ -40,7 +40,10 @@
             <h2 id="audio-player-title">尚未选择语音</h2>
             <p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>
           </div>
-          <button id="audio-player-close" type="button" class="button button-secondary">关闭</button>
+          <div class="audio-player-actions">
+            <button id="audio-player-toggle" type="button" class="button button-secondary" aria-expanded="false">展开</button>
+            <button id="audio-player-close" type="button" class="button button-secondary">关闭</button>
+          </div>
         </div>
         <audio id="audio-player" controls preload="metadata"></audio>
       </section>
@@ -91,18 +94,21 @@
           </div>
         </div>
         <form id="upload-form">
-          <div class="upload-fields">
+          <div class="upload-fields upload-grid">
             <label>
               触发关键词
               <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
             </label>
-            <label>
+            <label class="upload-file-field">
               音频文件
               <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*">
               <small>Supported formats: .wav, .mp3, .ogg, .silk, .amr, .flac, .m4a</small>
             </label>
           </div>
-          <button type="submit" class="button" data-mutation>上传语音</button>
+          <div class="upload-actions">
+            <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>
+            <button type="submit" class="button" data-mutation>上传语音</button>
+          </div>
         </form>
       </section>
     </main>

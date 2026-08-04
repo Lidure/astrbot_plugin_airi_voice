@@ -63,3 +63,15 @@ def test_voice_page_supports_fixed_feedback_and_bridge_compatible_delete():
     assert "apiDelete" not in script
     assert "position: fixed" in styles
     assert ".upload-fields" in styles
+
+
+def test_voice_page_has_compact_player_toggle_and_upload_card_contract():
+    page = Path("pages/airi-voice/index.html").read_text(encoding="utf-8")
+    script = Path("pages/airi-voice/app.js").read_text(encoding="utf-8")
+    styles = Path("pages/airi-voice/style.css").read_text(encoding="utf-8")
+
+    assert 'id="audio-player-toggle"' in page
+    assert 'class="upload-actions"' in page
+    assert "is-expanded" in script
+    assert ".audio-player-card.is-expanded" in styles
+    assert ".upload-actions" in styles

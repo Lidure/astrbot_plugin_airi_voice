@@ -24,6 +24,7 @@
     audioTitle: document.getElementById("audio-player-title"),
     audioSource: document.getElementById("audio-player-source"),
     audio: document.getElementById("audio-player"),
+    audioToggle: document.getElementById("audio-player-toggle"),
     audioClose: document.getElementById("audio-player-close"),
     deleteDialog: document.getElementById("delete-dialog"),
     deleteDescription: document.getElementById("delete-description"),
@@ -124,6 +125,12 @@
     elements.audioTitle.textContent = item.name || "未命名语音";
     elements.audioSource.textContent = sourceLabel(item.source);
     elements.audioCard.hidden = false;
+  }
+
+  function setPlayerExpanded(expanded) {
+    elements.audioCard.classList.toggle("is-expanded", expanded);
+    elements.audioToggle.setAttribute("aria-expanded", String(expanded));
+    elements.audioToggle.textContent = expanded ? "收起" : "展开";
   }
 
   function makeButton(label, className, callback, disabled = false) {
@@ -289,6 +296,9 @@
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
   elements.audio.addEventListener("ended", () => stopCurrentAudio({ hide: true }));
   elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }));
+  elements.audioToggle.addEventListener("click", () => {
+    setPlayerExpanded(!elements.audioCard.classList.contains("is-expanded"));
+  });
   elements.audioClose.addEventListener("click", () => stopCurrentAudio({ hide: true }));
   window.addEventListener("beforeunload", () => stopCurrentAudio());
 
