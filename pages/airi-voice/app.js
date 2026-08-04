@@ -70,6 +70,9 @@
   function extractAudioPayload(value) {
     if (typeof value === "string") return { data: value };
     if (!value || typeof value !== "object") return null;
+    if (value.status === "error") {
+      throw new Error(value.message || "音频接口返回错误");
+    }
     if (typeof value.data === "string") {
       return { data: value.data, content_type: value.content_type || value.contentType };
     }
@@ -207,6 +210,9 @@
       const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
       const payload = extractAudioPayload(await readResponse(response));
       if (!payload || typeof payload.data !== "string") throw new Error("音频数据无效");
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(payload.data) || payload.data.length % 4 !== 0) {
+        throw new Error("音频响应不是有效的 Base64 数据");
+      }
       const binary = atob(payload.data);
       const bytes = new Uint8Array(binary.length);
       for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
