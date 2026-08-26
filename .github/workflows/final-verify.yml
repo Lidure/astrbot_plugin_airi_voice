@@ -51,4 +51,4 @@ jobs:
           assert 'silk-python>=0.2.8' in Path('requirements.txt').read_text(encoding='utf-8')
           PY
       - name: Whitespace check
-        run: git diff --check master...HEAD
+        run: git diff --check origin/master...HEAD
