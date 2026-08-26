@@ -1,4 +1,4 @@
-name: Apply voice regression fixes
+name: Apply voice release docs
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
         with:
           ref: fix/voice-duplicate-webui-builtin
           fetch-depth: 0
-      - name: Apply bounded source changes
+      - name: Apply bounded release changes
         shell: bash
         run: |
           python - <<'PY'
@@ -30,78 +30,53 @@ jobs:
                   raise SystemExit(f"{path}: expected {expected} matches, found {actual}")
               target.write_text(text.replace(old, new, expected), encoding="utf-8")
 
-          replace(
-              "request_parser.py",
-              '''@dataclass(frozen=True)\nclass ParsedRequest:\n    kind: str\n    keyword: str | None = None\n\n\ndef parse_request''',
-              '''@dataclass(frozen=True)\nclass ParsedRequest:\n    kind: str\n    keyword: str | None = None\n\n\n_RANDOM_DISPATCH_ATTR = "__airi_random_voice_dispatched__"\n\n\ndef claim_random_dispatch(event: object) -> bool:\n    """Claim random-voice handling once for one AstrBot event.\n\n    Multiple AstrBot filters can match the same /随机... message. The check and\n    assignment are intentionally synchronous so only the first matching handler\n    owns the send before any handler reaches an await/yield boundary.\n    """\n\n    if event is None:\n        return False\n    try:\n        if getattr(event, _RANDOM_DISPATCH_ATTR, False):\n            return False\n        setattr(event, _RANDOM_DISPATCH_ATTR, True)\n    except Exception:\n        # Preserve legacy behavior for unusual immutable event proxies.\n        return True\n    return True\n\n\ndef parse_request''',
-          )
+          replace("main.py", '    "2.9.7",\n', '    "2.9.8",\n')
+          replace("metadata.yaml", "version: v2.9.7", "version: v2.9.8")
 
           replace(
-              "main.py",
-              '''    from .request_parser import parse_request\n''',
-              '''    from .request_parser import claim_random_dispatch, parse_request\n''',
+              "README.md",
+              "Version-2.9.7-orange",
+              "Version-2.9.8-orange",
           )
           replace(
-              "main.py",
-              '''    from request_parser import parse_request\n''',
-              '''    from request_parser import claim_random_dispatch, parse_request\n''',
+              "README.md",
+              "## 🖥️ WebUI 语音管理（v2.9.2）",
+              "## 🖥️ WebUI 语音管理（v2.9.8）",
           )
           replace(
-              "main.py",
-              '''        if request.kind in {"random_all", "random_filter"} and self.voice_map:\n            if request.kind == "random_all":\n''',
-              '''        if request.kind in {"random_all", "random_filter"} and self.voice_map:\n            if not claim_random_dispatch(event):\n                logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")\n                return\n            if request.kind == "random_all":\n''',
+              "README.md",
+              "Version 2.9.1 adds a shared audio player with pause, seek, and close controls. Starting another preview automatically switches the player to the new voice, while the refreshed visual layout keeps playback status and voice management easy to follow. The page also supports bridge-compatible voice deletion and bottom-fixed playback/error feedback.",
+              "v2.9.8 修复了 `/随机...` 被多个 AstrBot 处理器同时接收时重复发送语音的问题；WebUI 现在允许有权限的管理员删除插件内置 `voices/` 语音，并会在试听 `.silk` 时自动解码为浏览器可播放的 WAV。普通 MP3/WAV/OGG 等格式继续直接预览。",
           )
           replace(
-              "main.py",
-              '''        if not text.startswith("随机"):\n            text = f"随机 {keyword}".strip()\n\n        if not self.voice_map:\n''',
-              '''        if not text.startswith("随机"):\n            text = f"随机 {keyword}".strip()\n\n        if not claim_random_dispatch(event):\n            logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")\n            return\n\n        if not self.voice_map:\n''',
+              "README.md",
+              "4. 需要时删除自己添加或网页上传的语音，或点击重载刷新目录。",
+              "4. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。",
+          )
+          replace(
+              "README.md",
+              "- 内置 `voices/` 语音为只读，不能从页面删除；页面只能删除用户添加或网页上传的语音。",
+              "- 有权限的管理员可以从 WebUI 删除内置 `voices/`、用户添加和网页上传的语音；`extra_voice_pool` 中由配置直接引用的外部文件保持只读，避免误删配置源。",
+          )
+          replace(
+              "README.md",
+              "> 💡 如果引用的是 QQ 的 `.silk` 语音，插件会尝试先用 `silk/decoder` 解码成 PCM，再交给 `ffmpeg` 转成无损 `WAV` 保存。你也可以在插件配置里填写 `silk_decoder_path`。",
+              "> 💡 `.silk` 文件会作为语音文件正常保存；从 WebUI 试听时，v2.9.8 起会通过 `silk-python` 在插件侧解码并封装为 WAV，因此浏览器无需原生支持 QQ/Tencent Silk。",
           )
 
-          replace(
-              "voice_catalog.py",
-              '''        if entry.source == "builtin":\n            raise CatalogError("read_only", "built-in voices cannot be deleted")\n        if entry.id.startswith("extra_voices:configured/"):\n''',
-              '''        if entry.id.startswith("extra_voices:configured/"):\n''',
-          )
-
-          replace(
-              "web_api.py",
-              '''from dataclasses import dataclass\nimport inspect\nimport logging\nimport mimetypes\n''',
-              '''from dataclasses import dataclass\nimport inspect\nimport io\nimport logging\nimport mimetypes\nimport wave\n''',
-          )
-          replace(
-              "web_api.py",
-              '''LOGGER = logging.getLogger(__name__)\nPLUGIN_NAME = "astrbot_plugin_airi_voice"\n\n\n@dataclass(frozen=True)\nclass RegistrationResult:\n''',
-              '''LOGGER = logging.getLogger(__name__)\nPLUGIN_NAME = "astrbot_plugin_airi_voice"\nSILK_PREVIEW_RATE = 24000\n\n\ndef _decode_silk_to_wav(path: Path) -> bytes:\n    """Decode Tencent/standard SILK into browser-playable mono WAV bytes."""\n\n    import pysilk\n\n    pcm_buffer = io.BytesIO()\n    with path.open("rb") as source:\n        pysilk.decode(source, pcm_buffer, SILK_PREVIEW_RATE)\n    pcm_data = pcm_buffer.getvalue()\n    if not pcm_data:\n        raise ValueError("SILK decoder returned empty PCM data")\n\n    wav_buffer = io.BytesIO()\n    with wave.open(wav_buffer, "wb") as wav_file:\n        wav_file.setnchannels(1)\n        wav_file.setsampwidth(2)\n        wav_file.setframerate(SILK_PREVIEW_RATE)\n        wav_file.writeframes(pcm_data)\n    return wav_buffer.getvalue()\n\n\n@dataclass(frozen=True)\nclass RegistrationResult:\n''',
-          )
-          replace(
-              "web_api.py",
-              '''            path = self.plugin.catalog.audio_path(voice_id)\n            content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"\n            return self._json(\n                {\n                    "filename": path.name,\n                    "content_type": content_type,\n                    "audio_hex": path.read_bytes().hex(),\n                }\n            )\n''',
-              '''            path = self.plugin.catalog.audio_path(voice_id)\n            if path.suffix.lower() == ".silk":\n                audio_bytes = _decode_silk_to_wav(path)\n                filename = path.with_suffix(".wav").name\n                content_type = "audio/wav"\n            else:\n                audio_bytes = path.read_bytes()\n                filename = path.name\n                content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"\n            return self._json(\n                {\n                    "filename": filename,\n                    "content_type": content_type,\n                    "audio_hex": audio_bytes.hex(),\n                }\n            )\n''',
-          )
-
-          replace(
-              "pages/airi-voice/app.js",
-              '''      const actions = document.createElement("td");\n      actions.className = "row-actions";\n      actions.append(\n        makeButton("试听", "button button-small button-secondary", () => playVoice(item)),\n        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), item.source === "builtin"),\n      );\n''',
-              '''      const actions = document.createElement("td");\n      actions.className = "row-actions";\n      const configuredReadOnly = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");\n      actions.append(\n        makeButton("试听", "button button-small button-secondary", () => playVoice(item)),\n        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly),\n      );\n''',
-          )
-
-          replace(
-              "requirements.txt",
-              '''pydantic>=1.10.11''',
-              '''pydantic>=1.10.11\nsilk-python>=0.2.8''',
-          )
-
-          replace(
-              "tests/test_voice_catalog.py",
-              '''def test_deletes_user_file_and_rejects_builtin_deletion(tmp_path):\n    (tmp_path / "voices").mkdir()\n    (tmp_path / "voices" / "Built.wav").write_bytes(b"builtin")\n    (tmp_path / "data" / "user_added").mkdir(parents=True)\n    (tmp_path / "data" / "user_added" / "Added.ogg").write_bytes(b"user")\n    catalog = make_catalog(tmp_path)\n\n    catalog.delete("user_added:Added.ogg")\n\n    assert catalog.list_entries(source="user_added") == []\n    with pytest.raises(CatalogError) as error:\n        catalog.delete("builtin:Built.wav")\n    assert error.value.code == "read_only"\n    with pytest.raises(CatalogError) as error:\n        catalog.resolve_entry("extra_voices:missing.mp3")\n    assert error.value.code == "not_found"\n''',
-              '''def test_deletes_user_and_builtin_files(tmp_path):\n    (tmp_path / "voices").mkdir()\n    builtin = tmp_path / "voices" / "Built.wav"\n    builtin.write_bytes(b"builtin")\n    (tmp_path / "data" / "user_added").mkdir(parents=True)\n    (tmp_path / "data" / "user_added" / "Added.ogg").write_bytes(b"user")\n    catalog = make_catalog(tmp_path)\n\n    catalog.delete("user_added:Added.ogg")\n    catalog.delete("builtin:Built.wav")\n\n    assert catalog.list_entries(source="user_added") == []\n    assert catalog.list_entries(source="builtin") == []\n    assert builtin.exists() is False\n    with pytest.raises(CatalogError) as error:\n        catalog.resolve_entry("extra_voices:missing.mp3")\n    assert error.value.code == "not_found"\n''',
-          )
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          marker = "---\n\n## [2.9.7] - 2026-08-04"
+          if text.count(marker) != 1:
+              raise SystemExit("CHANGELOG.md: release insertion marker mismatch")
+          release = """---\n\n## [2.9.8] - 2026-08-26\n\n### 修复\n\n- 修复 `/随机...` 同一消息被多个 AstrBot 处理器同时命中时一次返回两条语音的问题；同一事件现在只允许一个随机语音处理器完成发送。\n- WebUI 允许有管理权限的用户删除插件内置 `voices/` 音频，同时继续保护由配置直接引用的外部语音文件。\n- 修复 `.silk`（例如内置“打卡啦摩托”）无法在 WebUI 试听的问题：服务端使用 `silk-python` 解码为 24 kHz 单声道 WAV 后再交给浏览器播放。\n\n### 依赖\n\n- 新增 `silk-python>=0.2.8`，用于跨平台 Silk 试听解码。\n\n## [2.9.7] - 2026-08-04"""
+          changelog.write_text(text.replace(marker, release, 1), encoding="utf-8")
           PY
-      - name: Commit source changes
+      - name: Commit release changes
         shell: bash
         run: |
           git config user.name "Lidure"
           git config user.email "101858375+Lidure@users.noreply.github.com"
-          git add main.py request_parser.py voice_catalog.py web_api.py pages/airi-voice/app.js requirements.txt tests/test_voice_catalog.py
-          git commit -m "fix: prevent duplicate random voice and repair builtin WebUI controls"
+          git add main.py metadata.yaml README.md CHANGELOG.md
+          git commit -m "docs: release v2.9.8"
           git push origin HEAD:fix/voice-duplicate-webui-builtin
