@@ -149,19 +149,20 @@ def test_refresh_rejects_case_insensitive_keywords_colliding_across_sources(
     assert error.value.code == "duplicate_keyword"
 
 
-def test_deletes_user_file_and_rejects_builtin_deletion(tmp_path):
+def test_deletes_user_and_builtin_files(tmp_path):
     (tmp_path / "voices").mkdir()
-    (tmp_path / "voices" / "Built.wav").write_bytes(b"builtin")
+    builtin = tmp_path / "voices" / "Built.wav"
+    builtin.write_bytes(b"builtin")
     (tmp_path / "data" / "user_added").mkdir(parents=True)
     (tmp_path / "data" / "user_added" / "Added.ogg").write_bytes(b"user")
     catalog = make_catalog(tmp_path)
 
     catalog.delete("user_added:Added.ogg")
+    catalog.delete("builtin:Built.wav")
 
     assert catalog.list_entries(source="user_added") == []
-    with pytest.raises(CatalogError) as error:
-        catalog.delete("builtin:Built.wav")
-    assert error.value.code == "read_only"
+    assert catalog.list_entries(source="builtin") == []
+    assert builtin.exists() is False
     with pytest.raises(CatalogError) as error:
         catalog.resolve_entry("extra_voices:missing.mp3")
     assert error.value.code == "not_found"

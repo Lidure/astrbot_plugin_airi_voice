@@ -6,8 +6,10 @@ older AstrBot versions can still load the chat plugin without WebUI support.
 
 from dataclasses import dataclass
 import inspect
+import io
 import logging
 import mimetypes
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,28 @@ else:
 
 LOGGER = logging.getLogger(__name__)
 PLUGIN_NAME = "astrbot_plugin_airi_voice"
+SILK_PREVIEW_RATE = 24000
+
+
+def _decode_silk_to_wav(path: Path) -> bytes:
+    """Decode Tencent/standard SILK into browser-playable mono WAV bytes."""
+
+    import pysilk
+
+    pcm_buffer = io.BytesIO()
+    with path.open("rb") as source:
+        pysilk.decode(source, pcm_buffer, SILK_PREVIEW_RATE)
+    pcm_data = pcm_buffer.getvalue()
+    if not pcm_data:
+        raise ValueError("SILK decoder returned empty PCM data")
+
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(SILK_PREVIEW_RATE)
+        wav_file.writeframes(pcm_data)
+    return wav_buffer.getvalue()
 
 
 @dataclass(frozen=True)
@@ -152,12 +176,19 @@ class VoiceManagementRoutes:
     async def get_audio(self, voice_id: str) -> Any:
         try:
             path = self.plugin.catalog.audio_path(voice_id)
-            content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            if path.suffix.lower() == ".silk":
+                audio_bytes = _decode_silk_to_wav(path)
+                filename = path.with_suffix(".wav").name
+                content_type = "audio/wav"
+            else:
+                audio_bytes = path.read_bytes()
+                filename = path.name
+                content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
             return self._json(
                 {
-                    "filename": path.name,
+                    "filename": filename,
                     "content_type": content_type,
-                    "audio_hex": path.read_bytes().hex(),
+                    "audio_hex": audio_bytes.hex(),
                 }
             )
         except CatalogError as error:
