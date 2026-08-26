@@ -1,0 +1,54 @@
+name: Final v2.9.8 verification
+
+on:
+  push:
+    branches:
+      - verify/voice-fix-final
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - name: Full pytest suite
+        run: pytest -q
+      - name: Compile Python modules
+        run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py
+      - name: Validate configuration JSON
+        run: python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"
+      - name: Decode actual builtin Silk fixture
+        run: |
+          python - <<'PY'
+          import io
+          import wave
+          from pathlib import Path
+          from web_api import _decode_silk_to_wav
+
+          wav_bytes = _decode_silk_to_wav(Path('voices/打卡啦摩托.silk'))
+          assert wav_bytes.startswith(b'RIFF')
+          with wave.open(io.BytesIO(wav_bytes), 'rb') as audio:
+              assert audio.getnchannels() == 1
+              assert audio.getsampwidth() == 2
+              assert audio.getframerate() == 24000
+              assert audio.getnframes() > 0
+          print(f'decoded builtin Silk to {len(wav_bytes)} WAV bytes')
+          PY
+      - name: Check release version consistency
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          assert 'version: v2.9.8' in Path('metadata.yaml').read_text(encoding='utf-8')
+          assert '"2.9.8"' in Path('main.py').read_text(encoding='utf-8')
+          assert 'Version-2.9.8-orange' in Path('README.md').read_text(encoding='utf-8')
+          assert '## [2.9.8] - 2026-08-26' in Path('CHANGELOG.md').read_text(encoding='utf-8')
+          assert 'silk-python>=0.2.8' in Path('requirements.txt').read_text(encoding='utf-8')
+          PY
+      - name: Whitespace check
+        run: git diff --check master...HEAD
