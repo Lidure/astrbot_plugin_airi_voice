@@ -1,0 +1,107 @@
+name: Apply voice regression fixes
+
+on:
+  push:
+    branches:
+      - verify/apply-voice-fix
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/voice-duplicate-webui-builtin
+          fetch-depth: 0
+      - name: Apply bounded source changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, expected=1):
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              actual = text.count(old)
+              if actual != expected:
+                  raise SystemExit(f"{path}: expected {expected} matches, found {actual}")
+              target.write_text(text.replace(old, new, expected), encoding="utf-8")
+
+          replace(
+              "request_parser.py",
+              '''@dataclass(frozen=True)\nclass ParsedRequest:\n    kind: str\n    keyword: str | None = None\n\n\ndef parse_request''',
+              '''@dataclass(frozen=True)\nclass ParsedRequest:\n    kind: str\n    keyword: str | None = None\n\n\n_RANDOM_DISPATCH_ATTR = "__airi_random_voice_dispatched__"\n\n\ndef claim_random_dispatch(event: object) -> bool:\n    """Claim random-voice handling once for one AstrBot event.\n\n    Multiple AstrBot filters can match the same /随机... message. The check and\n    assignment are intentionally synchronous so only the first matching handler\n    owns the send before any handler reaches an await/yield boundary.\n    """\n\n    if event is None:\n        return False\n    try:\n        if getattr(event, _RANDOM_DISPATCH_ATTR, False):\n            return False\n        setattr(event, _RANDOM_DISPATCH_ATTR, True)\n    except Exception:\n        # Preserve legacy behavior for unusual immutable event proxies.\n        return True\n    return True\n\n\ndef parse_request''',
+          )
+
+          replace(
+              "main.py",
+              '''    from .request_parser import parse_request\n''',
+              '''    from .request_parser import claim_random_dispatch, parse_request\n''',
+          )
+          replace(
+              "main.py",
+              '''    from request_parser import parse_request\n''',
+              '''    from request_parser import claim_random_dispatch, parse_request\n''',
+          )
+          replace(
+              "main.py",
+              '''        if request.kind in {"random_all", "random_filter"} and self.voice_map:\n            if request.kind == "random_all":\n''',
+              '''        if request.kind in {"random_all", "random_filter"} and self.voice_map:\n            if not claim_random_dispatch(event):\n                logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")\n                return\n            if request.kind == "random_all":\n''',
+          )
+          replace(
+              "main.py",
+              '''        if not text.startswith("随机"):\n            text = f"随机 {keyword}".strip()\n\n        if not self.voice_map:\n''',
+              '''        if not text.startswith("随机"):\n            text = f"随机 {keyword}".strip()\n\n        if not claim_random_dispatch(event):\n            logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")\n            return\n\n        if not self.voice_map:\n''',
+          )
+
+          replace(
+              "voice_catalog.py",
+              '''        if entry.source == "builtin":\n            raise CatalogError("read_only", "built-in voices cannot be deleted")\n        if entry.id.startswith("extra_voices:configured/"):\n''',
+              '''        if entry.id.startswith("extra_voices:configured/"):\n''',
+          )
+
+          replace(
+              "web_api.py",
+              '''from dataclasses import dataclass\nimport inspect\nimport logging\nimport mimetypes\n''',
+              '''from dataclasses import dataclass\nimport inspect\nimport io\nimport logging\nimport mimetypes\nimport wave\n''',
+          )
+          replace(
+              "web_api.py",
+              '''LOGGER = logging.getLogger(__name__)\nPLUGIN_NAME = "astrbot_plugin_airi_voice"\n\n\n@dataclass(frozen=True)\nclass RegistrationResult:\n''',
+              '''LOGGER = logging.getLogger(__name__)\nPLUGIN_NAME = "astrbot_plugin_airi_voice"\nSILK_PREVIEW_RATE = 24000\n\n\ndef _decode_silk_to_wav(path: Path) -> bytes:\n    """Decode Tencent/standard SILK into browser-playable mono WAV bytes."""\n\n    import pysilk\n\n    pcm_buffer = io.BytesIO()\n    with path.open("rb") as source:\n        pysilk.decode(source, pcm_buffer, SILK_PREVIEW_RATE)\n    pcm_data = pcm_buffer.getvalue()\n    if not pcm_data:\n        raise ValueError("SILK decoder returned empty PCM data")\n\n    wav_buffer = io.BytesIO()\n    with wave.open(wav_buffer, "wb") as wav_file:\n        wav_file.setnchannels(1)\n        wav_file.setsampwidth(2)\n        wav_file.setframerate(SILK_PREVIEW_RATE)\n        wav_file.writeframes(pcm_data)\n    return wav_buffer.getvalue()\n\n\n@dataclass(frozen=True)\nclass RegistrationResult:\n''',
+          )
+          replace(
+              "web_api.py",
+              '''            path = self.plugin.catalog.audio_path(voice_id)\n            content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"\n            return self._json(\n                {\n                    "filename": path.name,\n                    "content_type": content_type,\n                    "audio_hex": path.read_bytes().hex(),\n                }\n            )\n''',
+              '''            path = self.plugin.catalog.audio_path(voice_id)\n            if path.suffix.lower() == ".silk":\n                audio_bytes = _decode_silk_to_wav(path)\n                filename = path.with_suffix(".wav").name\n                content_type = "audio/wav"\n            else:\n                audio_bytes = path.read_bytes()\n                filename = path.name\n                content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"\n            return self._json(\n                {\n                    "filename": filename,\n                    "content_type": content_type,\n                    "audio_hex": audio_bytes.hex(),\n                }\n            )\n''',
+          )
+
+          replace(
+              "pages/airi-voice/app.js",
+              '''      const actions = document.createElement("td");\n      actions.className = "row-actions";\n      actions.append(\n        makeButton("试听", "button button-small button-secondary", () => playVoice(item)),\n        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), item.source === "builtin"),\n      );\n''',
+              '''      const actions = document.createElement("td");\n      actions.className = "row-actions";\n      const configuredReadOnly = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");\n      actions.append(\n        makeButton("试听", "button button-small button-secondary", () => playVoice(item)),\n        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly),\n      );\n''',
+          )
+
+          replace(
+              "requirements.txt",
+              '''pydantic>=1.10.11''',
+              '''pydantic>=1.10.11\nsilk-python>=0.2.8''',
+          )
+
+          replace(
+              "tests/test_voice_catalog.py",
+              '''def test_deletes_user_file_and_rejects_builtin_deletion(tmp_path):\n    (tmp_path / "voices").mkdir()\n    (tmp_path / "voices" / "Built.wav").write_bytes(b"builtin")\n    (tmp_path / "data" / "user_added").mkdir(parents=True)\n    (tmp_path / "data" / "user_added" / "Added.ogg").write_bytes(b"user")\n    catalog = make_catalog(tmp_path)\n\n    catalog.delete("user_added:Added.ogg")\n\n    assert catalog.list_entries(source="user_added") == []\n    with pytest.raises(CatalogError) as error:\n        catalog.delete("builtin:Built.wav")\n    assert error.value.code == "read_only"\n    with pytest.raises(CatalogError) as error:\n        catalog.resolve_entry("extra_voices:missing.mp3")\n    assert error.value.code == "not_found"\n''',
+              '''def test_deletes_user_and_builtin_files(tmp_path):\n    (tmp_path / "voices").mkdir()\n    builtin = tmp_path / "voices" / "Built.wav"\n    builtin.write_bytes(b"builtin")\n    (tmp_path / "data" / "user_added").mkdir(parents=True)\n    (tmp_path / "data" / "user_added" / "Added.ogg").write_bytes(b"user")\n    catalog = make_catalog(tmp_path)\n\n    catalog.delete("user_added:Added.ogg")\n    catalog.delete("builtin:Built.wav")\n\n    assert catalog.list_entries(source="user_added") == []\n    assert catalog.list_entries(source="builtin") == []\n    assert builtin.exists() is False\n    with pytest.raises(CatalogError) as error:\n        catalog.resolve_entry("extra_voices:missing.mp3")\n    assert error.value.code == "not_found"\n''',
+          )
+          PY
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name "Lidure"
+          git config user.email "101858375+Lidure@users.noreply.github.com"
+          git add main.py request_parser.py voice_catalog.py web_api.py pages/airi-voice/app.js requirements.txt tests/test_voice_catalog.py
+          git commit -m "fix: prevent duplicate random voice and repair builtin WebUI controls"
+          git push origin HEAD:fix/voice-duplicate-webui-builtin
