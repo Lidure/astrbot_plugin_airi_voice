@@ -21,11 +21,11 @@ from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 if __package__:
     from .web_api import dashboard_request_is_admin, register_web_features
-    from .request_parser import parse_request
+    from .request_parser import claim_random_dispatch, parse_request
     from .voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 else:
     from web_api import dashboard_request_is_admin, register_web_features
-    from request_parser import parse_request
+    from request_parser import claim_random_dispatch, parse_request
     from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 
 try:
@@ -612,7 +612,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
     "airi_voice",
     "lidure",
     "输入关键词发送对应语音",
-    "2.9.7",
+    "2.9.8",
     "https://github.com/Lidure/astrbot_plugin_airi_voice",
 )
 class AiriVoice(Star):
@@ -1386,6 +1386,9 @@ class AiriVoice(Star):
             return
 
         if request.kind in {"random_all", "random_filter"} and self.voice_map:
+            if not claim_random_dispatch(event):
+                logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")
+                return
             if request.kind == "random_all":
                 name = random.choice(list(self.voice_map.keys()))
                 matched_path = self.voice_map.get(name)
@@ -1452,6 +1455,10 @@ class AiriVoice(Star):
             text = f"随机 {keyword.strip()}"
         if not text.startswith("随机"):
             text = f"随机 {keyword}".strip()
+
+        if not claim_random_dispatch(event):
+            logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")
+            return
 
         if not self.voice_map:
             return

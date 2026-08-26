@@ -167,9 +167,10 @@
       size.textContent = displaySize(item.size);
       const actions = document.createElement("td");
       actions.className = "row-actions";
+      const configuredReadOnly = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");
       actions.append(
         makeButton("试听", "button button-small button-secondary", () => playVoice(item)),
-        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), item.source === "builtin"),
+        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly),
       );
       row.append(name, source, extension, size, actions);
       elements.list.append(row);

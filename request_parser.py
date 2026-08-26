@@ -7,6 +7,29 @@ class ParsedRequest:
     keyword: str | None = None
 
 
+_RANDOM_DISPATCH_ATTR = "__airi_random_voice_dispatched__"
+
+
+def claim_random_dispatch(event: object) -> bool:
+    """Claim random-voice handling once for one AstrBot event.
+
+    Multiple AstrBot filters can match the same /随机... message. The check and
+    assignment are intentionally synchronous so only the first matching handler
+    owns the send before any handler reaches an await/yield boundary.
+    """
+
+    if event is None:
+        return False
+    try:
+        if getattr(event, _RANDOM_DISPATCH_ATTR, False):
+            return False
+        setattr(event, _RANDOM_DISPATCH_ATTR, True)
+    except Exception:
+        # Preserve legacy behavior for unusual immutable event proxies.
+        return True
+    return True
+
+
 def parse_request(text: str, enable_prefix: bool, trigger_mode: str, raw_text: str | None = None) -> ParsedRequest:
     text = (text or "").strip()
     raw = raw_text.strip() if isinstance(raw_text, str) else None

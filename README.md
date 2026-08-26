@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.9.7-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.9.8-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -96,11 +96,11 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ---
 
-## 🖥️ WebUI 语音管理（v2.9.2）
+## 🖥️ WebUI 语音管理（v2.9.8）
 
 支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；打开后可搜索、按来源筛选、试听、上传、删除和重载语音。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
 
-Version 2.9.1 adds a shared audio player with pause, seek, and close controls. Starting another preview automatically switches the player to the new voice, while the refreshed visual layout keeps playback status and voice management easy to follow. The page also supports bridge-compatible voice deletion and bottom-fixed playback/error feedback.
+v2.9.8 修复了 `/随机...` 被多个 AstrBot 处理器同时接收时重复发送语音的问题；WebUI 现在允许有权限的管理员删除插件内置 `voices/` 语音，并会在试听 `.silk` 时自动解码为浏览器可播放的 WAV。普通 MP3/WAV/OGG 等格式继续直接预览。
 
 > 低版本 AstrBot 不支持 Plugin Pages / Web API 时，插件仍可正常加载；请继续使用聊天命令和插件配置页管理语音。WebUI 的实际页面发现、桥接和权限行为仍需要在目标 AstrBot Dashboard 中手动验证。
 
@@ -109,7 +109,7 @@ Version 2.9.1 adds a shared audio player with pause, seek, and close controls. S
 1. 在 AstrBot Dashboard 打开 **插件管理** → **Airi Voice** → **插件详情页**。
 2. 在页面中用搜索和来源筛选查找语音，点击试听确认内容。
 3. 填写安全的触发关键词后上传音频；WebUI 接受 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **20 MB**。
-4. 需要时删除自己添加或网页上传的语音，或点击重载刷新目录。
+4. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。
 5. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。
 
 如果页面不可用，请改用 `/voice.list`、`/voice.add 名字`、`/voice.delete 名字` 和 `/voice.reload`；管理命令仍受原有权限控制。
@@ -131,7 +131,7 @@ Version 2.9.1 adds a shared audio player with pause, seek, and close controls. S
 
 - 上传关键词会进行安全校验；包含路径分隔符、`..` 或控制字符的关键词会被拒绝。
 - 重复的有效关键词会被拒绝，避免覆盖或产生歧义。
-- 内置 `voices/` 语音为只读，不能从页面删除；页面只能删除用户添加或网页上传的语音。
+- 有权限的管理员可以从 WebUI 删除内置 `voices/`、用户添加和网页上传的语音；`extra_voice_pool` 中由配置直接引用的外部文件保持只读，避免误删配置源。
 - 所有上传、删除和重载都是管理员操作，且目录穿越会被阻止。
 
 ---
@@ -175,7 +175,7 @@ Version 2.9.1 adds a shared audio player with pause, seek, and close controls. S
 > 2. 你引用这条语音，发送：`/voice.add 早上好`
 > 3. 以后任何人发送 `早上好`，Airi 都会回复同样的语音！
 
-> 💡 如果引用的是 QQ 的 `.silk` 语音，插件会尝试先用 `silk/decoder` 解码成 PCM，再交给 `ffmpeg` 转成无损 `WAV` 保存。你也可以在插件配置里填写 `silk_decoder_path`。
+> 💡 `.silk` 文件会作为语音文件正常保存；从 WebUI 试听时，v2.9.8 起会通过 `silk-python` 在插件侧解码并封装为 WAV，因此浏览器无需原生支持 QQ/Tencent Silk。
 
 > ⚠️ **注意：** 此命令需要管理员权限
 

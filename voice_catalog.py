@@ -109,8 +109,6 @@ class VoiceCatalog:
 
     def delete(self, entry_id: str) -> None:
         entry = self.resolve_entry(entry_id)
-        if entry.source == "builtin":
-            raise CatalogError("read_only", "built-in voices cannot be deleted")
         if entry.id.startswith("extra_voices:configured/"):
             raise CatalogError("read_only", "configured voice pool entries cannot be deleted")
         if not entry.available:
