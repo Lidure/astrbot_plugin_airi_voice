@@ -138,6 +138,19 @@ class VoiceManagementRoutes:
     def _forbidden(self) -> Any:
         return self._error("forbidden", "administrator permission is required", 403)
 
+    async def _request_json_payload(self) -> dict[str, Any]:
+        request = self._web().request
+        loader = getattr(request, "json", None)
+        if not callable(loader):
+            return {}
+        try:
+            payload = loader(default={})
+        except TypeError:
+            payload = loader()
+        if inspect.isawaitable(payload):
+            payload = await payload
+        return payload if isinstance(payload, dict) else {}
+
     @staticmethod
     def _entry_json(entry: VoiceEntry) -> dict[str, Any]:
         return {
@@ -236,9 +249,11 @@ class VoiceManagementRoutes:
         if not self._is_admin():
             return self._forbidden()
         try:
-            query = self._web().request.query
-            voice_id = query.get("voice_id", "")
-            alias = query.get("alias", "")
+            request = self._web().request
+            payload = await self._request_json_payload()
+            query = request.query
+            voice_id = payload.get("voice_id") or query.get("voice_id", "")
+            alias = payload.get("alias") or query.get("alias", "")
             entry = self.plugin.catalog.add_alias(voice_id, alias)
             self.plugin.refresh_voice_catalog()
             return self._json({"item": self._entry_json(entry)})
@@ -252,9 +267,11 @@ class VoiceManagementRoutes:
         if not self._is_admin():
             return self._forbidden()
         try:
-            query = self._web().request.query
-            voice_id = query.get("voice_id", "")
-            alias = query.get("alias", "")
+            request = self._web().request
+            payload = await self._request_json_payload()
+            query = request.query
+            voice_id = payload.get("voice_id") or query.get("voice_id", "")
+            alias = payload.get("alias") or query.get("alias", "")
             entry = self.plugin.catalog.remove_alias(voice_id, alias)
             self.plugin.refresh_voice_catalog()
             return self._json({"item": self._entry_json(entry)})

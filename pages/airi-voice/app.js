@@ -35,6 +35,7 @@
     uploadForm: document.getElementById("upload-form"),
     keyword: document.getElementById("keyword-input"),
     file: document.getElementById("file-input"),
+    uploadFeedback: document.getElementById("upload-feedback"),
     audioCard: document.getElementById("audio-player-card"),
     audioTitle: document.getElementById("audio-player-title"),
     audioSource: document.getElementById("audio-player-source"),
@@ -81,6 +82,13 @@
     state.error = error ? messageFrom(error, "操作未完成，请稍后重试。") : "";
     elements.error.textContent = state.error;
     elements.error.hidden = !state.error;
+  }
+
+  function showUploadFeedback(message, kind = "") {
+    elements.uploadFeedback.textContent = message || "";
+    elements.uploadFeedback.hidden = !message;
+    elements.uploadFeedback.classList.toggle("is-success", kind === "success");
+    elements.uploadFeedback.classList.toggle("is-error", kind === "error");
   }
 
   function displaySize(bytes) {
@@ -327,9 +335,15 @@
     event.preventDefault();
     const keyword = elements.keyword.value.trim();
     const file = elements.file.files && elements.file.files[0];
-    if (!keyword || !file) { showError(new Error("请填写关键词并选择音频文件。")); return; }
+    if (!keyword || !file) {
+      const error = new Error("请填写关键词并选择音频文件。");
+      showError(error);
+      showUploadFeedback(`❌ ${error.message}`, "error");
+      return;
+    }
     setLoading(true, "正在上传语音…");
     showError(null);
+    showUploadFeedback("");
     try {
       const dotIndex = file.name.lastIndexOf(".");
       const extension = dotIndex >= 0 ? file.name.slice(dotIndex) : "";
@@ -341,9 +355,11 @@
       await readResponse(response);
       elements.uploadForm.reset();
       await loadVoices();
-      elements.status.textContent = "语音已上传并刷新列表。";
+      showUploadFeedback(`✅ 语音「${keyword}」上传成功，已刷新列表。`, "success");
+      elements.status.textContent = `语音「${keyword}」上传成功。`;
     } catch (error) {
       showError(error);
+      showUploadFeedback(`❌ 上传失败：${messageFrom(error, "操作未完成，请稍后重试。")}`, "error");
       elements.status.textContent = "上传未完成。";
     } finally {
       setLoading(false);
@@ -357,8 +373,7 @@
     setLoading(true, `正在为“${item.name}”添加关键词…`);
     showError(null);
     try {
-      const endpoint = `keywords/aliases/add?voice_id=${encodeURIComponent(item.id)}&alias=${encodeURIComponent(alias)}`;
-      const response = await bridge().apiPost(endpoint);
+      const response = await bridge().apiPost("keywords/aliases/add", { voice_id: item.id, alias });
       await readResponse(response);
       input.value = "";
       await loadKeywords();
@@ -375,8 +390,7 @@
     setLoading(true, `正在删除额外关键词“${alias}”…`);
     showError(null);
     try {
-      const endpoint = `keywords/aliases/remove?voice_id=${encodeURIComponent(item.id)}&alias=${encodeURIComponent(alias)}`;
-      const response = await bridge().apiPost(endpoint);
+      const response = await bridge().apiPost("keywords/aliases/remove", { voice_id: item.id, alias });
       await readResponse(response);
       await loadKeywords();
       elements.status.textContent = `已删除额外触发关键词“${alias}”。`;
