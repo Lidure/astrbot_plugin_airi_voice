@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.9.9-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.10.0-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -88,6 +88,8 @@ https://vocalremover.org/zh/cutter
 
 > 💡 可在插件配置中开启 `fuzzy_keyword_match`（模糊匹配）。开启后，用户消息只要包含主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。Prefix 模式仍要求 `#voice` 前缀，LLM 模式不受该开关影响。默认关闭。
 
+> 🔊 **v2.10.0 发送兼容性**：聊天发送统一先准备为 WAV。原 WAV 直接发送；MP3/OGG/FLAC/M4A/AMR 优先复用 AstrBot MediaResolver，失败时使用插件依赖的 PyAV 自带编解码库转换，最后才尝试系统 ffmpeg；SILK 复用 silk-python 解码。转换结果缓存到插件数据目录 `send_cache`，源文件变化后自动生成新缓存。
+
 > ⚠️ 未选择 LLM 模式时，插件只作为普通语音关键词插件工作，大模型不会看到 `airi_*` 工具。
 
 ### 4. bot追加语音
@@ -98,11 +100,11 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ---
 
-## 🖥️ WebUI 音频与关键词管理（v2.9.9）
+## 🖥️ WebUI 音频与关键词管理（v2.10.0）
 
 支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；页面现在分为 **音频管理** 与 **关键词管理** 两个导航页。音频管理保留搜索、试听、上传、删除和重载；关键词管理可为每条音频维护多个额外触发关键词。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
 
-v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。当前开发版在不变更版本号的前提下新增关键词管理：主关键词与额外关键词都能触发同一音频，额外关键词持久化在插件数据目录的 `keyword_aliases.json` 中；主关键词与所有别名全局唯一并忽略大小写。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。
+v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。v2.10.0 延续关键词管理能力：主关键词与额外关键词都能触发同一音频，额外关键词持久化在插件数据目录的 `keyword_aliases.json` 中；主关键词与所有别名全局唯一并忽略大小写。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。
 
 > 低版本 AstrBot 不支持 Plugin Pages / Web API 时，插件仍可正常加载；请继续使用聊天命令和插件配置页管理语音。WebUI 的实际页面发现、桥接和权限行为仍需要在目标 AstrBot Dashboard 中手动验证。
 
