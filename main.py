@@ -276,7 +276,7 @@ class AiriListAllVoicesTool(FunctionTool[AstrAgentContext]):
         if page_size > 100:
             page_size = 100
 
-        names = sorted(self.plugin.voice_map.keys())
+        names = sorted(self.plugin.primary_voice_map.keys())
         total = len(names)
         total_pages = max(1, (total + page_size - 1) // page_size)
         if page > total_pages:
@@ -345,7 +345,7 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
 
         keyword_lower = keyword.lower()
         matched = []
-        for name in self.plugin.voice_map.keys():
+        for name in self.plugin.primary_voice_map.keys():
             nl = name.lower()
             if keyword_lower in nl:
                 if nl == keyword_lower:
@@ -356,7 +356,7 @@ class AiriSearchVoicesTool(FunctionTool[AstrAgentContext]):
                     rank = 2
                 matched.append((rank, name))
         if not matched:
-            suggestions = _fuzzy_suggest(keyword, list(self.plugin.voice_map.keys()))
+            suggestions = _fuzzy_suggest(keyword, list(self.plugin.primary_voice_map.keys()))
             meta = {"keyword": keyword}
             if suggestions:
                 meta["suggestions"] = suggestions
@@ -476,11 +476,11 @@ class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
 
         keyword = (kwargs.get("keyword") or "").strip()
         if keyword:
-            candidates = [n for n in self.plugin.voice_map.keys() if keyword.lower() in n.lower()]
+            candidates = [n for n in self.plugin.primary_voice_map.keys() if keyword.lower() in n.lower()]
             if not candidates:
                 return _tool_err("not_found", f"未找到包含「{keyword}」的语音名称。", {"keyword": keyword})
         else:
-            candidates = list(self.plugin.voice_map.keys())
+            candidates = list(self.plugin.primary_voice_map.keys())
 
         name = random.choice(candidates)
         path = self.plugin.voice_map.get(name)
@@ -683,6 +683,7 @@ class AiriVoice(Star):
         self.auto_reply_voice_enabled = self.config.get("auto_reply_voice_on_bot_message", False)
         self.list_as_image = self.config.get("list_as_image", False)   # ← 新增
 
+        self.primary_voice_map: Dict[str, str] = {}
         self.voice_map: Dict[str, str] = {}
         self.sorted_keys: List[str] = []
 
@@ -805,7 +806,7 @@ class AiriVoice(Star):
         return ".mp3"
 
     def _update_sorted_keys(self):
-        self.sorted_keys = sorted(self.voice_map.keys())
+        self.sorted_keys = sorted(self.primary_voice_map.keys())
 
     def _configured_extra_voice_pool(self) -> tuple[str, ...]:
         pool = self.config.get("extra_voice_pool", [])
@@ -814,7 +815,8 @@ class AiriVoice(Star):
         return tuple(item for item in pool if isinstance(item, str))
 
     def _sync_catalog_state(self):
-        self.voice_map = self.catalog.refresh()
+        self.primary_voice_map = self.catalog.refresh()
+        self.voice_map = self.catalog.trigger_map()
         self._update_sorted_keys()
 
     def web_request_is_admin(self, username: Optional[str]) -> bool:
@@ -1390,8 +1392,8 @@ class AiriVoice(Star):
                 logger.debug("[AiriVoice] 当前随机语音事件已由其他处理器发送，跳过重复发送")
                 return
             if request.kind == "random_all":
-                name = random.choice(list(self.voice_map.keys()))
-                matched_path = self.voice_map.get(name)
+                name = random.choice(list(self.primary_voice_map.keys()))
+                matched_path = self.primary_voice_map.get(name)
                 if matched_path:
                     try:
                         yield event.chain_result([Record.fromFileSystem(matched_path)])
@@ -1404,7 +1406,7 @@ class AiriVoice(Star):
                 return
 
             kw = request.keyword or ""
-            candidates = [name for name in self.voice_map.keys() if kw in name]
+            candidates = [name for name in self.primary_voice_map.keys() if kw in name]
             if not candidates:
                 yield event.plain_result(f"未找到包含「{kw}」的语音")
                 return

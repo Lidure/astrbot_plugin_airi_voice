@@ -147,8 +147,13 @@ class VoiceManagementRoutes:
             "extension": entry.extension,
             "size": entry.size,
             "available": entry.available,
-            "aliases": list(getattr(entry, "aliases", ()) or ()),
         }
+
+    @staticmethod
+    def _keyword_entry_json(entry: VoiceEntry) -> dict[str, Any]:
+        payload = VoiceManagementRoutes._entry_json(entry)
+        payload["aliases"] = list(getattr(entry, "aliases", ()) or ())
+        return payload
 
     async def list_voices(self) -> Any:
         try:
@@ -170,7 +175,7 @@ class VoiceManagementRoutes:
     async def list_keywords(self) -> Any:
         try:
             entries = self.plugin.catalog.list_entries()
-            items = [self._entry_json(entry) for entry in entries]
+            items = [self._keyword_entry_json(entry) for entry in entries]
             return self._json({"items": items, "total": len(items)})
         except CatalogError as error:
             return self._catalog_error(error)
