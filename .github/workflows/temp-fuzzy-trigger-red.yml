@@ -18,73 +18,40 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Apply fuzzy keyword trigger implementation
+      - name: Document fuzzy keyword trigger
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path_str, old, new):
-              path = Path(path_str)
-              text = path.read_text(encoding="utf-8")
-              if old in text:
-                  if text.count(old) != 1:
-                      raise SystemExit(f"unexpected replacement count in {path_str}: {text.count(old)}")
-                  path.write_text(text.replace(old, new, 1), encoding="utf-8")
-              elif new not in text:
-                  raise SystemExit(f"replacement target not found in {path_str}")
+          readme = Path("README.md")
+          text = readme.read_text(encoding="utf-8")
+          marker = "> ⚠️ 未选择 LLM 模式时，插件只作为普通语音关键词插件工作，大模型不会看到 `airi_*` 工具。"
+          note = "> 💡 可在插件配置中开启 `fuzzy_keyword_match`（模糊匹配）。开启后，用户消息只要包含主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。Prefix 模式仍要求 `#voice` 前缀，LLM 模式不受该开关影响。默认关闭。"
+          if note not in text:
+              if marker not in text:
+                  raise SystemExit("README trigger-mode marker not found")
+              readme.write_text(text.replace(marker, note + "\n\n" + marker, 1), encoding="utf-8")
 
-          parser = Path("request_parser.py")
-          parser_text = parser.read_text(encoding="utf-8")
-          matcher = '''def match_trigger_keyword(text: str, voice_keys, fuzzy_match: bool = False) -> str | None:\n    """Resolve an exact or contained trigger keyword deterministically."""\n    value = (text or "").strip()\n    keys = [key for key in voice_keys if isinstance(key, str) and key]\n    if value in keys:\n        return value\n    if not fuzzy_match or not value:\n        return None\n\n    matches = [key for key in keys if key in value]\n    if not matches:\n        return None\n    matches.sort(key=lambda key: (-len(key), value.find(key), key))\n    return matches[0]\n\n\n'''
-          if "def match_trigger_keyword(" not in parser_text:
-              marker = "def parse_request(text: str, enable_prefix: bool, trigger_mode: str, raw_text: str | None = None) -> ParsedRequest:\n"
-              if marker not in parser_text:
-                  raise SystemExit("parse_request marker not found")
-              parser.write_text(parser_text.replace(marker, matcher + marker, 1), encoding="utf-8")
-
-          main = "main.py"
-          replace_once(
-              main,
-              "    from .request_parser import claim_random_dispatch, parse_request\n",
-              "    from .request_parser import claim_random_dispatch, match_trigger_keyword, parse_request\n",
-          )
-          replace_once(
-              main,
-              "    from request_parser import claim_random_dispatch, parse_request\n",
-              "    from request_parser import claim_random_dispatch, match_trigger_keyword, parse_request\n",
-          )
-          replace_once(
-              main,
-              '        self.auto_reply_voice_enabled = self.config.get("auto_reply_voice_on_bot_message", False)\n',
-              '        self.fuzzy_keyword_match = bool(self.config.get("fuzzy_keyword_match", False))\n        self.auto_reply_voice_enabled = self.config.get("auto_reply_voice_on_bot_message", False)\n',
-          )
-          replace_once(
-              main,
-              '        keyword = request.keyword\n\n        matched_path = self.voice_map.get(keyword)\n',
-              '        keyword = match_trigger_keyword(request.keyword or "", self.voice_map.keys(), self.fuzzy_keyword_match)\n        if not keyword:\n            return\n\n        matched_path = self.voice_map.get(keyword)\n',
-          )
-
-          conf = "_conf_schema.json"
-          fuzzy_block = '''  "fuzzy_keyword_match": {\n    "description": "模糊匹配",\n    "type": "bool",\n    "hint": "开启后，用户消息只要包含任意主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。prefix 模式仍要求 #voice 前缀，LLM 模式不使用此匹配。默认关闭。",\n    "default": false\n  },\n'''
-          conf_path = Path(conf)
-          conf_text = conf_path.read_text(encoding="utf-8")
-          if '"fuzzy_keyword_match"' not in conf_text:
-              marker = '  "admin_mode": {\n'
-              if marker not in conf_text:
-                  raise SystemExit("admin_mode marker not found")
-              conf_path.write_text(conf_text.replace(marker, fuzzy_block + marker, 1), encoding="utf-8")
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          entry = "- 新增可选的 `fuzzy_keyword_match`（模糊匹配）配置：开启后用户消息包含任意主关键词或额外关键词即可触发；精确匹配优先，否则选择最长命中关键词；Prefix/LLM/随机语音边界保持不变。"
+          if entry not in text:
+              marker = "### 新增\n\n"
+              if marker not in text:
+                  raise SystemExit("CHANGELOG Unreleased marker not found")
+              changelog.write_text(text.replace(marker, marker + entry + "\n", 1), encoding="utf-8")
           PY
-      - name: Commit implementation if needed
+      - name: Commit documentation if needed
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "Implementation already applied"
+            echo "Documentation already applied"
           else
             git config user.name "Lidure"
             git config user.email "101858375+Lidure@users.noreply.github.com"
-            git add request_parser.py main.py _conf_schema.json
-            git commit -m "feat: add fuzzy keyword trigger option"
+            git add README.md CHANGELOG.md
+            git commit -m "docs: document fuzzy keyword trigger"
             git push origin HEAD:feat/fuzzy-keyword-trigger
           fi
       - run: python -m pip install --upgrade pip
@@ -92,6 +59,11 @@ jobs:
       - run: pytest -q
       - run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py
       - run: python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"
+      - name: Verify fuzzy trigger contract
+        run: |
+          grep -q '"fuzzy_keyword_match"' _conf_schema.json
+          grep -q 'def match_trigger_keyword' request_parser.py
+          grep -q 'self.fuzzy_keyword_match' main.py
       - name: Verify version remains v2.9.9
         run: |
           grep -q 'version: v2.9.9' metadata.yaml
