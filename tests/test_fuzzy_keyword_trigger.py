@@ -5,7 +5,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from request_parser import ParsedRequest, match_trigger_keyword, parse_request
+import request_parser
+from request_parser import ParsedRequest, parse_request
+
+
+def match_trigger_keyword(text, keys, fuzzy_match):
+    matcher = getattr(request_parser, "match_trigger_keyword", None)
+    assert callable(matcher), "request_parser.match_trigger_keyword is not implemented"
+    return matcher(text, keys, fuzzy_match=fuzzy_match)
 
 
 def test_fuzzy_match_disabled_keeps_exact_keyword_contract():
