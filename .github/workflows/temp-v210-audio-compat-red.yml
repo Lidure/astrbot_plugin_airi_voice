@@ -1,0 +1,22 @@
+name: Temporary v2.10 audio compatibility RED
+
+on:
+  push:
+    branches:
+      - fix/audio-trigger-compat-v2.10.0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Inspect current direct Record sends
+        run: grep -n "Record.fromFileSystem" main.py || true
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q tests/test_audio_trigger_compat_v210.py
