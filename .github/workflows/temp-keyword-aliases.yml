@@ -5,6 +5,9 @@ on:
     branches:
       - feat/webui-keyword-aliases
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +18,150 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Apply bounded keyword alias integration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          # Keep primary voice names separate from the full trigger map so aliases
+          # never duplicate /voice.list entries or bias random selection.
+          replace_once(
+              "main.py",
+              "        self.voice_map: Dict[str, str] = {}\n        self.sorted_keys: List[str] = []\n",
+              "        self.primary_voice_map: Dict[str, str] = {}\n        self.voice_map: Dict[str, str] = {}\n        self.sorted_keys: List[str] = []\n",
+          )
+          replace_once(
+              "main.py",
+              "    def _update_sorted_keys(self):\n        self.sorted_keys = sorted(self.voice_map.keys())\n",
+              "    def _update_sorted_keys(self):\n        self.sorted_keys = sorted(self.primary_voice_map.keys())\n",
+          )
+          replace_once(
+              "main.py",
+              "    def _sync_catalog_state(self):\n        self.voice_map = self.catalog.refresh()\n        self._update_sorted_keys()\n",
+              "    def _sync_catalog_state(self):\n        self.primary_voice_map = self.catalog.refresh()\n        self.voice_map = self.catalog.trigger_map()\n        self._update_sorted_keys()\n",
+          )
+          replace_once(
+              "main.py",
+              "        names = sorted(self.plugin.voice_map.keys())\n",
+              "        names = sorted(self.plugin.primary_voice_map.keys())\n",
+          )
+          replace_once(
+              "main.py",
+              "        for name in self.plugin.voice_map.keys():\n",
+              "        for name in self.plugin.primary_voice_map.keys():\n",
+          )
+          replace_once(
+              "main.py",
+              "            suggestions = _fuzzy_suggest(keyword, list(self.plugin.voice_map.keys()))\n",
+              "            suggestions = _fuzzy_suggest(keyword, list(self.plugin.primary_voice_map.keys()))\n",
+          )
+          replace_once(
+              "main.py",
+              "            candidates = [n for n in self.plugin.voice_map.keys() if keyword.lower() in n.lower()]\n",
+              "            candidates = [n for n in self.plugin.primary_voice_map.keys() if keyword.lower() in n.lower()]\n",
+          )
+          replace_once(
+              "main.py",
+              "            candidates = list(self.plugin.voice_map.keys())\n",
+              "            candidates = list(self.plugin.primary_voice_map.keys())\n",
+          )
+          replace_once(
+              "main.py",
+              "                name = random.choice(list(self.voice_map.keys()))\n                matched_path = self.voice_map.get(name)\n",
+              "                name = random.choice(list(self.primary_voice_map.keys()))\n                matched_path = self.primary_voice_map.get(name)\n",
+          )
+          replace_once(
+              "main.py",
+              "            candidates = [name for name in self.voice_map.keys() if kw in name]\n",
+              "            candidates = [name for name in self.primary_voice_map.keys() if kw in name]\n",
+          )
+
+          # Preserve the existing /voices JSON contract; aliases are exposed only
+          # by the dedicated keyword-management endpoint.
+          replace_once(
+              "web_api.py",
+              '''    @staticmethod\n    def _entry_json(entry: VoiceEntry) -> dict[str, Any]:\n        return {\n            "id": entry.id,\n            "name": entry.name,\n            "source": entry.source,\n            "extension": entry.extension,\n            "size": entry.size,\n            "available": entry.available,\n            "aliases": list(getattr(entry, "aliases", ()) or ()),\n        }\n''',
+              '''    @staticmethod\n    def _entry_json(entry: VoiceEntry) -> dict[str, Any]:\n        return {\n            "id": entry.id,\n            "name": entry.name,\n            "source": entry.source,\n            "extension": entry.extension,\n            "size": entry.size,\n            "available": entry.available,\n        }\n\n    @staticmethod\n    def _keyword_entry_json(entry: VoiceEntry) -> dict[str, Any]:\n        payload = VoiceManagementRoutes._entry_json(entry)\n        payload["aliases"] = list(getattr(entry, "aliases", ()) or ())\n        return payload\n''',
+          )
+          replace_once(
+              "web_api.py",
+              '''    async def list_keywords(self) -> Any:\n        try:\n            entries = self.plugin.catalog.list_entries()\n            items = [self._entry_json(entry) for entry in entries]\n            return self._json({"items": items, "total": len(items)})\n''',
+              '''    async def list_keywords(self) -> Any:\n        try:\n            entries = self.plugin.catalog.list_entries()\n            items = [self._keyword_entry_json(entry) for entry in entries]\n            return self._json({"items": items, "total": len(items)})\n''',
+          )
+
+          # Existing route-registration test now includes the three new fixed routes.
+          replace_once(
+              "tests/test_web_api_routes.py",
+              '''        "/astrbot_plugin_airi_voice/voices",\n        "/astrbot_plugin_airi_voice/voices/<voice_id>/audio",\n''',
+              '''        "/astrbot_plugin_airi_voice/voices",\n        "/astrbot_plugin_airi_voice/keywords",\n        "/astrbot_plugin_airi_voice/keywords/aliases/add",\n        "/astrbot_plugin_airi_voice/keywords/aliases/remove",\n        "/astrbot_plugin_airi_voice/voices/<voice_id>/audio",\n''',
+          )
+
+          # Add tab/alias styling without disturbing the existing player layout.
+          style_path = Path("pages/airi-voice/style.css")
+          style = style_path.read_text(encoding="utf-8")
+          marker = "/* keyword management navigation */"
+          if marker not in style:
+              style += '''\n\n/* keyword management navigation */\n.management-tabs {\n  display: inline-flex;\n  gap: .35rem;\n  margin: 1.25rem 0 .25rem;\n  padding: .3rem;\n  background: var(--surface);\n  border: 1px solid var(--border);\n  border-radius: .85rem;\n  box-shadow: var(--shadow);\n}\n.management-tab {\n  border: 0;\n  border-radius: .62rem;\n  padding: .62rem 1rem;\n  color: var(--muted);\n  background: transparent;\n  cursor: pointer;\n  font-weight: 700;\n}\n.management-tab:hover { color: var(--text); background: var(--accent-soft); }\n.management-tab.is-active { color: var(--accent-text); background: var(--accent-gradient); }\n.management-view[hidden] { display: none !important; }\n.keyword-panel { margin-top: 1.25rem; }\n.keyword-table-wrap table { min-width: 760px; }\n.alias-list { display: flex; flex-wrap: wrap; gap: .45rem; min-width: 14rem; }\n.alias-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: .35rem;\n  padding: .3rem .35rem .3rem .6rem;\n  color: var(--text);\n  background: var(--accent-soft);\n  border: 1px solid color-mix(in srgb, var(--accent-blue) 30%, var(--border));\n  border-radius: 999px;\n  font-size: .88rem;\n}\n.alias-chip-remove {\n  display: grid;\n  place-items: center;\n  width: 1.35rem;\n  height: 1.35rem;\n  padding: 0;\n  border: 0;\n  border-radius: 50%;\n  color: var(--muted);\n  background: transparent;\n  cursor: pointer;\n  font-size: 1rem;\n  line-height: 1;\n}\n.alias-chip-remove:hover:not(:disabled) { color: #fff; background: var(--danger); }\n.alias-chip-remove:disabled { cursor: not-allowed; opacity: .55; }\n.alias-empty { color: var(--muted); font-size: .9rem; }\n.keyword-unavailable { display: block; margin-top: .28rem; color: var(--danger); font-size: .78rem; font-weight: 600; }\n.alias-form { display: flex; gap: .5rem; min-width: 18rem; }\n.alias-form input { min-width: 0; }\n\n@media (max-width: 640px) {\n  .management-tabs { display: flex; width: 100%; }\n  .management-tab { flex: 1; }\n  .keyword-table-wrap table { min-width: 0; }\n  .alias-form { min-width: 0; margin-top: .45rem; }\n  .alias-list { min-width: 0; }\n}\n'''
+              style_path.write_text(style, encoding="utf-8")
+
+          # Documentation, intentionally without a version bump.
+          replace_once(
+              "README.md",
+              "## 🖥️ WebUI 语音管理（v2.9.9）",
+              "## 🖥️ WebUI 音频与关键词管理（v2.9.9）",
+          )
+          replace_once(
+              "README.md",
+              "支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；打开后可搜索、按来源筛选、试听、上传、删除和重载语音。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。",
+              "支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；页面现在分为 **音频管理** 与 **关键词管理** 两个导航页。音频管理保留搜索、试听、上传、删除和重载；关键词管理可为每条音频维护多个额外触发关键词。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。",
+          )
+          replace_once(
+              "README.md",
+              "v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。",
+              "v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。当前开发版在不变更版本号的前提下新增关键词管理：主关键词与额外关键词都能触发同一音频，额外关键词持久化在插件数据目录的 `keyword_aliases.json` 中；主关键词与所有别名全局唯一并忽略大小写。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。",
+          )
+          replace_once(
+              "README.md",
+              "2. 在页面中用搜索和来源筛选查找语音，点击试听确认内容。\n3. 填写安全的触发关键词后上传音频；WebUI 接受 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **20 MB**。\n4. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。\n5. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。",
+              "2. 在 **音频管理** 中用搜索和来源筛选查找语音，点击试听确认内容。\n3. 填写安全的主触发关键词后上传音频；WebUI 接受 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **20 MB**。\n4. 切换到 **关键词管理**，可为任意音频添加或删除多个额外触发关键词；主关键词和别名都可以触发同一音频。\n5. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。\n6. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。",
+          )
+          replace_once(
+              "README.md",
+              "- 重复的有效关键词会被拒绝，避免覆盖或产生歧义。",
+              "- 主关键词与所有额外触发关键词全局唯一（忽略大小写）；任何冲突都会被拒绝，避免一个关键词对应多个音频。",
+          )
+
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          unreleased = '''## [Unreleased] - 2026-09-02\n\n### 新增\n\n- WebUI 增加“音频管理 / 关键词管理”双导航。\n- 支持为每条音频配置多个额外触发关键词；主关键词与别名均可触发同一音频。\n- 关键词别名持久化到插件数据目录 `keyword_aliases.json`，并对主关键词/别名执行忽略大小写的全局唯一校验。\n- 列表与随机语音继续只使用主关键词，避免别名造成重复展示或改变随机权重。\n\n'''
+          if "## [Unreleased] - 2026-09-02" not in text:
+              anchor = "---\n\n"
+              if anchor not in text:
+                  raise SystemExit("CHANGELOG anchor missing")
+              text = text.replace(anchor, anchor + unreleased, 1)
+              changelog.write_text(text, encoding="utf-8")
+          PY
+      - name: Commit bounded integration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No integration changes to commit"
+          else
+            git config user.name "Lidure"
+            git config user.email "101858375+Lidure@users.noreply.github.com"
+            git add main.py web_api.py pages/airi-voice/style.css tests/test_web_api_routes.py README.md CHANGELOG.md
+            git commit -m "feat: integrate keyword alias management"
+            git push origin HEAD:feat/webui-keyword-aliases
+          fi
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
       - run: pytest -q
