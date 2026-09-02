@@ -1,0 +1,24 @@
+name: Final v2.10.1 restored-head verification
+
+on:
+  push:
+    branches:
+      - verify/optional-wav-conversion-v2101-final3
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q
+      - run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py audio_compat.py
+      - run: python -c "import json; s=json.load(open('_conf_schema.json', encoding='utf-8')); assert s['convert_audio_to_wav']['default'] is False"
+      - run: test ! -e __dummy__
+      - run: git diff --check origin/master...e719a0bfaa8c6d242f411deba42cccf8d4316836
