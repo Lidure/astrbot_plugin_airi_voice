@@ -5,6 +5,9 @@ on:
     branches:
       - feat/webui-keyword-aliases
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +18,52 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Keep slash random on primary keyword pool
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("main.py")
+          text = path.read_text(encoding="utf-8")
+          replacements = [
+              (
+                  "            name = random.choice(list(self.voice_map.keys()))\n            matched_path = self.voice_map.get(name)\n",
+                  "            name = random.choice(list(self.primary_voice_map.keys()))\n            matched_path = self.primary_voice_map.get(name)\n",
+              ),
+              (
+                  "        candidates = [name for name in self.voice_map if match.group(1).strip() in name]\n",
+                  "        candidates = [name for name in self.primary_voice_map if match.group(1).strip() in name]\n",
+              ),
+              (
+                  "        matched_path = self.voice_map[random.choice(candidates)]\n",
+                  "        matched_path = self.primary_voice_map[random.choice(candidates)]\n",
+              ),
+          ]
+          changed = False
+          for old, new in replacements:
+              if old in text:
+                  if text.count(old) != 1:
+                      raise SystemExit(f"unexpected duplicate replacement target: {old!r}")
+                  text = text.replace(old, new, 1)
+                  changed = True
+              elif new not in text:
+                  raise SystemExit(f"neither old nor fixed form found: {old!r}")
+          if changed:
+              path.write_text(text, encoding="utf-8")
+          PY
+      - name: Commit slash random fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Slash random fix already present"
+          else
+            git config user.name "Lidure"
+            git config user.email "101858375+Lidure@users.noreply.github.com"
+            git add main.py
+            git commit -m "fix: keep aliases out of slash random pool"
+            git push origin HEAD:feat/webui-keyword-aliases
+          fi
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
       - run: pytest -q
