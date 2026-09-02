@@ -1,0 +1,35 @@
+name: Final WebUI bridge and upload feedback verification
+
+on:
+  push:
+    branches:
+      - verify/webui-alias-post-upload-feedback-final
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q
+      - run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py
+      - run: python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"
+      - name: Verify bridge contract source
+        run: |
+          grep -Fq 'bridge().apiPost("keywords/aliases/add", { voice_id: item.id, alias })' pages/airi-voice/app.js
+          grep -Fq 'bridge().apiPost("keywords/aliases/remove", { voice_id: item.id, alias })' pages/airi-voice/app.js
+          ! grep -Fq 'keywords/aliases/add?voice_id=' pages/airi-voice/app.js
+          grep -Fq 'payload = await self._request_json_payload()' web_api.py
+          grep -Fq 'id="upload-feedback"' pages/airi-voice/index.html
+          grep -Fq '上传成功' pages/airi-voice/app.js
+      - name: Verify version remains v2.9.9
+        run: |
+          grep -q 'version: v2.9.9' metadata.yaml
+          grep -q '"2.9.9"' main.py
+      - run: git diff --check origin/master...HEAD
