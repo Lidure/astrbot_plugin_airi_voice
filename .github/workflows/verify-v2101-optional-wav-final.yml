@@ -1,0 +1,65 @@
+name: Final v2.10.1 optional WAV verification
+
+on:
+  push:
+    branches:
+      - verify/optional-wav-conversion-v2101-final
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - name: Full regression suite
+        run: pytest -q
+      - name: Validate config and Python
+        run: |
+          python -m py_compile main.py web_api.py voice_catalog.py request_parser.py audio_compat.py
+          python -c "import json; s=json.load(open('_conf_schema.json', encoding='utf-8')); assert s['convert_audio_to_wav']['default'] is False"
+      - name: Verify disabled path bypasses conversion
+        run: |
+          python - <<'PY'
+          import asyncio, tempfile
+          from pathlib import Path
+          from audio_compat import prepare_voice_path
+
+          class BoomCompat:
+              async def prepare(self, path):
+                  raise AssertionError('converter must not run when disabled')
+
+          with tempfile.TemporaryDirectory() as td:
+              p = Path(td) / 'voice.mp3'
+              p.write_bytes(b'raw')
+              result = asyncio.run(prepare_voice_path(p, False, BoomCompat()))
+              assert result == str(p)
+              print('disabled_path=' + result)
+          PY
+      - name: Verify enabled path still converts real MP3
+        run: |
+          python - <<'PY'
+          import asyncio, tempfile
+          from pathlib import Path
+          from audio_compat import AudioSendCompat, prepare_voice_path
+
+          with tempfile.TemporaryDirectory() as td:
+              source = Path('voices/生辰快乐.mp3')
+              output = Path(asyncio.run(prepare_voice_path(source, True, AudioSendCompat(Path(td) / 'cache'))))
+              data = output.read_bytes()
+              assert data[:4] == b'RIFF' and data[8:12] == b'WAVE'
+              print(f'enabled_wav={len(data)}')
+          PY
+      - name: Verify release contract
+        run: |
+          grep -q 'version: v2.10.1' metadata.yaml
+          grep -q '"2.10.1"' main.py
+          grep -q 'Version-2.10.1-orange' README.md
+          grep -q 'self.convert_audio_to_wav = bool(self.config.get("convert_audio_to_wav", False))' main.py
+      - name: Verify clean formal diff
+        run: git diff --check origin/master...b28a6056c9ce4b5f9e1c57defc08a4addfb3a537
