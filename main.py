@@ -1465,8 +1465,8 @@ class AiriVoice(Star):
         if not self.voice_map:
             return
         if text in {"随机", "随机语音", "随机发条语音"}:
-            name = random.choice(list(self.voice_map.keys()))
-            matched_path = self.voice_map.get(name)
+            name = random.choice(list(self.primary_voice_map.keys()))
+            matched_path = self.primary_voice_map.get(name)
             if matched_path:
                 yield event.chain_result([Record.fromFileSystem(matched_path)])
             return
@@ -1474,11 +1474,11 @@ class AiriVoice(Star):
         match = re.match(r"^随机\s*(.+)$", text)
         if not match:
             return
-        candidates = [name for name in self.voice_map if match.group(1).strip() in name]
+        candidates = [name for name in self.primary_voice_map if match.group(1).strip() in name]
         if not candidates:
             yield event.plain_result(f"未找到包含「{match.group(1).strip()}」的语音")
             return
-        matched_path = self.voice_map[random.choice(candidates)]
+        matched_path = self.primary_voice_map[random.choice(candidates)]
         yield event.chain_result([Record.fromFileSystem(matched_path)])
 
     @filter.event_message_type(filter.EventMessageType.ALL)
