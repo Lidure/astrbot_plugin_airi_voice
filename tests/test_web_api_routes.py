@@ -333,6 +333,9 @@ def test_registration_registers_public_routes_and_swallows_route_registration_fa
     assert successful.api_registered is True
     assert [route[0] for route in successful_context.routes] == [
         "/astrbot_plugin_airi_voice/voices",
+        "/astrbot_plugin_airi_voice/keywords",
+        "/astrbot_plugin_airi_voice/keywords/aliases/add",
+        "/astrbot_plugin_airi_voice/keywords/aliases/remove",
         "/astrbot_plugin_airi_voice/voices/<voice_id>/audio",
         "/astrbot_plugin_airi_voice/voices/upload",
         "/astrbot_plugin_airi_voice/voices/upload/<keyword>",

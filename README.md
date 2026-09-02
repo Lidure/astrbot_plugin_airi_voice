@@ -96,21 +96,22 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ---
 
-## 🖥️ WebUI 语音管理（v2.9.9）
+## 🖥️ WebUI 音频与关键词管理（v2.9.9）
 
-支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；打开后可搜索、按来源筛选、试听、上传、删除和重载语音。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
+支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；页面现在分为 **音频管理** 与 **关键词管理** 两个导航页。音频管理保留搜索、试听、上传、删除和重载；关键词管理可为每条音频维护多个额外触发关键词。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
 
-v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。
+v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。当前开发版在不变更版本号的前提下新增关键词管理：主关键词与额外关键词都能触发同一音频，额外关键词持久化在插件数据目录的 `keyword_aliases.json` 中；主关键词与所有别名全局唯一并忽略大小写。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。
 
 > 低版本 AstrBot 不支持 Plugin Pages / Web API 时，插件仍可正常加载；请继续使用聊天命令和插件配置页管理语音。WebUI 的实际页面发现、桥接和权限行为仍需要在目标 AstrBot Dashboard 中手动验证。
 
 ### 新手快速开始
 
 1. 在 AstrBot Dashboard 打开 **插件管理** → **Airi Voice** → **插件详情页**。
-2. 在页面中用搜索和来源筛选查找语音，点击试听确认内容。
-3. 填写安全的触发关键词后上传音频；WebUI 接受 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **20 MB**。
-4. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。
-5. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。
+2. 在 **音频管理** 中用搜索和来源筛选查找语音，点击试听确认内容。
+3. 填写安全的主触发关键词后上传音频；WebUI 接受 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **20 MB**。
+4. 切换到 **关键词管理**，可为任意音频添加或删除多个额外触发关键词；主关键词和别名都可以触发同一音频。
+5. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。
+6. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。
 
 如果页面不可用，请改用 `/voice.list`、`/voice.add 名字`、`/voice.delete 名字` 和 `/voice.reload`；管理命令仍受原有权限控制。
 
@@ -130,7 +131,7 @@ v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 
 ### WebUI 安全限制
 
 - 上传关键词会进行安全校验；包含路径分隔符、`..` 或控制字符的关键词会被拒绝。
-- 重复的有效关键词会被拒绝，避免覆盖或产生歧义。
+- 主关键词与所有额外触发关键词全局唯一（忽略大小写）；任何冲突都会被拒绝，避免一个关键词对应多个音频。
 - 有权限的管理员可以从 WebUI 删除内置 `voices/`、用户添加和网页上传的语音；`extra_voice_pool` 中由配置直接引用的外部文件保持只读，避免误删配置源。
 - 所有上传、删除和重载都是管理员操作，且目录穿越会被阻止。
 

@@ -1,7 +1,15 @@
 (() => {
   "use strict";
 
-  const state = { items: [], query: "", source: "", loading: false, error: "" };
+  const state = {
+    items: [],
+    keywordItems: [],
+    query: "",
+    source: "",
+    activeView: "audio",
+    loading: false,
+    error: "",
+  };
   let pendingDeleteId = null;
   let currentAudioUrl = null;
   let currentVoice = null;
@@ -17,6 +25,13 @@
     search: document.getElementById("search-input"),
     source: document.getElementById("source-filter"),
     refresh: document.getElementById("refresh-button"),
+    audioTab: document.getElementById("audio-tab"),
+    keywordsTab: document.getElementById("keywords-tab"),
+    audioView: document.getElementById("audio-management-view"),
+    keywordView: document.getElementById("keyword-management-view"),
+    keywordList: document.getElementById("keyword-list"),
+    keywordTable: document.getElementById("keyword-table"),
+    keywordEmpty: document.getElementById("keyword-empty-state"),
     uploadForm: document.getElementById("upload-form"),
     keyword: document.getElementById("keyword-input"),
     file: document.getElementById("file-input"),
@@ -39,6 +54,7 @@
 
   function messageFrom(error, fallback) {
     if (error && typeof error === "object" && error.error && error.error.message) return error.error.message;
+    if (error && typeof error === "object" && error.body && error.body.error && error.body.error.message) return error.body.error.message;
     if (error instanceof Error && error.message) return error.message;
     return fallback;
   }
@@ -50,6 +66,8 @@
       throw payload || new Error("请求未成功完成。");
     }
     if (response && typeof response.json === "function") return response.json();
+    if (response && response.error) throw response;
+    if (response && response.body && response.body.error) throw response.body;
     return response;
   }
 
@@ -150,6 +168,20 @@
     return button;
   }
 
+  function setActiveView(view) {
+    const keywords = view === "keywords";
+    state.activeView = keywords ? "keywords" : "audio";
+    elements.audioView.hidden = keywords;
+    elements.keywordView.hidden = !keywords;
+    elements.audioTab.classList.toggle("is-active", !keywords);
+    elements.keywordsTab.classList.toggle("is-active", keywords);
+    elements.audioTab.setAttribute("aria-selected", String(!keywords));
+    elements.keywordsTab.setAttribute("aria-selected", String(keywords));
+    showError(null);
+    if (keywords) loadKeywords();
+    else loadVoices();
+  }
+
   function renderVoices() {
     elements.list.replaceChildren();
     elements.total.textContent = String(state.items.length);
@@ -177,6 +209,78 @@
     }
   }
 
+  function renderKeywords() {
+    elements.keywordList.replaceChildren();
+    elements.keywordEmpty.hidden = state.keywordItems.length !== 0;
+    elements.keywordTable.hidden = state.keywordItems.length === 0;
+
+    for (const item of state.keywordItems) {
+      const row = document.createElement("tr");
+      const primary = document.createElement("td");
+      const primaryName = document.createElement("strong");
+      primaryName.textContent = item.name || "未命名语音";
+      primary.append(primaryName);
+      if (!item.available) {
+        const unavailable = document.createElement("span");
+        unavailable.className = "keyword-unavailable";
+        unavailable.textContent = "文件暂不可用";
+        primary.append(unavailable);
+      }
+
+      const source = document.createElement("td");
+      source.textContent = sourceLabel(item.source);
+
+      const aliases = document.createElement("td");
+      aliases.className = "alias-list";
+      const aliasValues = Array.isArray(item.aliases) ? item.aliases : [];
+      if (aliasValues.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "alias-empty";
+        empty.textContent = "暂无额外关键词";
+        aliases.append(empty);
+      } else {
+        for (const alias of aliasValues) {
+          const chip = document.createElement("span");
+          chip.className = "alias-chip";
+          const label = document.createElement("span");
+          label.textContent = alias;
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "alias-chip-remove";
+          remove.textContent = "×";
+          remove.title = `删除额外关键词：${alias}`;
+          remove.setAttribute("aria-label", `删除额外关键词 ${alias}`);
+          remove.dataset.mutation = "";
+          remove.disabled = state.loading;
+          remove.addEventListener("click", () => removeAlias(item, alias));
+          chip.append(label, remove);
+          aliases.append(chip);
+        }
+      }
+
+      const addCell = document.createElement("td");
+      const form = document.createElement("form");
+      form.className = "alias-form";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 120;
+      input.placeholder = "输入额外触发关键词";
+      input.setAttribute("aria-label", `为 ${item.name} 添加额外触发关键词`);
+      const addButton = document.createElement("button");
+      addButton.type = "submit";
+      addButton.className = "button button-small";
+      addButton.textContent = "添加";
+      addButton.dataset.mutation = "";
+      addButton.disabled = state.loading;
+      form.addEventListener("submit", (event) => addAlias(event, item, input));
+      form.append(input, addButton);
+      addCell.append(form);
+
+      row.append(primary, source, aliases, addCell);
+      elements.keywordList.append(row);
+    }
+  }
+
   async function loadVoices() {
     setLoading(true, "正在加载语音列表…");
     showError(null);
@@ -191,6 +295,29 @@
       renderVoices();
       showError(error);
       elements.status.textContent = "无法加载语音列表。";
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadKeywords() {
+    setLoading(true, "正在加载关键词列表…");
+    showError(null);
+    try {
+      const response = await bridge().apiGet("keywords");
+      const payload = await readResponse(response);
+      state.keywordItems = Array.isArray(payload && payload.items) ? payload.items : [];
+      renderKeywords();
+      const aliasTotal = state.keywordItems.reduce(
+        (total, item) => total + (Array.isArray(item.aliases) ? item.aliases.length : 0),
+        0,
+      );
+      elements.status.textContent = `共 ${state.keywordItems.length} 个主关键词，${aliasTotal} 个额外触发关键词。`;
+    } catch (error) {
+      state.keywordItems = [];
+      renderKeywords();
+      showError(error);
+      elements.status.textContent = "无法加载关键词列表。";
     } finally {
       setLoading(false);
     }
@@ -218,6 +345,44 @@
     } catch (error) {
       showError(error);
       elements.status.textContent = "上传未完成。";
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function addAlias(event, item, input) {
+    event.preventDefault();
+    const alias = input.value.trim();
+    if (!alias) { showError(new Error("请输入要添加的额外触发关键词。")); return; }
+    setLoading(true, `正在为“${item.name}”添加关键词…`);
+    showError(null);
+    try {
+      const endpoint = `keywords/aliases/add?voice_id=${encodeURIComponent(item.id)}&alias=${encodeURIComponent(alias)}`;
+      const response = await bridge().apiPost(endpoint);
+      await readResponse(response);
+      input.value = "";
+      await loadKeywords();
+      elements.status.textContent = `已为“${item.name}”添加额外触发关键词“${alias}”。`;
+    } catch (error) {
+      showError(error);
+      elements.status.textContent = "添加关键词未完成。";
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeAlias(item, alias) {
+    setLoading(true, `正在删除额外关键词“${alias}”…`);
+    showError(null);
+    try {
+      const endpoint = `keywords/aliases/remove?voice_id=${encodeURIComponent(item.id)}&alias=${encodeURIComponent(alias)}`;
+      const response = await bridge().apiPost(endpoint);
+      await readResponse(response);
+      await loadKeywords();
+      elements.status.textContent = `已删除额外触发关键词“${alias}”。`;
+    } catch (error) {
+      showError(error);
+      elements.status.textContent = "删除关键词未完成。";
     } finally {
       setLoading(false);
     }
@@ -255,7 +420,8 @@
     try {
       const response = await bridge().apiPost("voices/reload");
       await readResponse(response);
-      await loadVoices();
+      if (state.activeView === "keywords") await loadKeywords();
+      else await loadVoices();
       elements.status.textContent = "语音目录已重载。";
     } catch (error) {
       showError(error);
@@ -303,6 +469,8 @@
   elements.search.addEventListener("input", () => { state.query = elements.search.value.trim(); loadVoices(); });
   elements.source.addEventListener("change", () => { state.source = elements.source.value; loadVoices(); });
   elements.refresh.addEventListener("click", reloadVoices);
+  elements.audioTab.addEventListener("click", () => setActiveView("audio"));
+  elements.keywordsTab.addEventListener("click", () => setActiveView("keywords"));
   elements.uploadForm.addEventListener("submit", uploadVoice);
   elements.confirmDelete.addEventListener("click", (event) => { event.preventDefault(); deleteVoice(); });
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
@@ -321,6 +489,17 @@
   elements.audio.addEventListener("ended", updateMiniPlayLabel);
   window.addEventListener("beforeunload", () => stopCurrentAudio());
 
-  window.AiriVoicePage = { state, loadVoices, uploadVoice, deleteVoice, reloadVoices, playVoice, stopCurrentAudio };
+  window.AiriVoicePage = {
+    state,
+    loadVoices,
+    loadKeywords,
+    uploadVoice,
+    deleteVoice,
+    reloadVoices,
+    playVoice, stopCurrentAudio,
+    addAlias,
+    removeAlias,
+    setActiveView,
+  };
   loadVoices();
 })();

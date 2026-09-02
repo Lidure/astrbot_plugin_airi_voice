@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Airi Voice 音频管理</title>
+    <title>Airi Voice 管理</title>
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
@@ -11,107 +11,138 @@
       <header class="page-header">
         <div>
           <p class="eyebrow">Airi Voice</p>
-          <h1>音频管理</h1>
-          <p class="intro">搜索、试听并管理机器人可用的语音。上传或删除需要管理权限。</p>
+          <h1>语音管理</h1>
+          <p class="intro">管理音频文件与触发关键词。主关键词和额外关键词都可以触发同一条语音。</p>
         </div>
-        <button id="refresh-button" type="button" class="button button-secondary" data-mutation>刷新列表</button>
+        <button id="refresh-button" type="button" class="button button-secondary" data-mutation>重载语音</button>
       </header>
 
-      <section class="summary-grid" aria-label="当前状态">
-        <article class="summary-card">
-          <span class="summary-label">当前条目</span>
-          <strong id="voice-total">0</strong>
-          <span>会随搜索条件变化</span>
-        </article>
-        <article class="summary-card">
-          <span class="summary-label">管理权限提示</span>
-          <strong>上传、删除与重载</strong>
-          <span><code>admin_mode=admin</code> 时，请先配置 <code>webui_admin_users</code>。</span>
-        </article>
-      </section>
+      <nav class="management-tabs" aria-label="管理导航">
+        <button id="audio-tab" type="button" class="management-tab is-active" data-view="audio" aria-controls="audio-management-view" aria-selected="true">音频管理</button>
+        <button id="keywords-tab" type="button" class="management-tab" data-view="keywords" aria-controls="keyword-management-view" aria-selected="false">关键词管理</button>
+      </nav>
 
       <p id="status-message" class="status-message" role="status" aria-live="polite">正在准备列表…</p>
       <p id="error-message" class="error-message" role="alert" hidden></p>
 
-      <section id="audio-player-card" class="audio-player-card is-mini" hidden aria-labelledby="audio-player-title">
-        <div class="audio-player-heading">
-          <div>
-            <p class="eyebrow">正在试听</p>
-            <h2 id="audio-player-title">尚未选择语音</h2>
-            <p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>
-          </div>
-          <div class="audio-player-actions">
-            <button id="audio-player-mini-play" type="button" class="button button-secondary" aria-label="播放或暂停">播放</button>
-            <button id="audio-player-toggle" type="button" class="button button-secondary" aria-expanded="false">展开</button>
-          </div>
-        </div>
-        <audio id="audio-player" controls preload="metadata"></audio>
-      </section>
+      <section id="audio-management-view" class="management-view" aria-labelledby="audio-tab">
+        <section class="summary-grid" aria-label="当前状态">
+          <article class="summary-card">
+            <span class="summary-label">当前条目</span>
+            <strong id="voice-total">0</strong>
+            <span>会随搜索条件变化</span>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">管理权限提示</span>
+            <strong>上传、删除、关键词与重载</strong>
+            <span><code>admin_mode=admin</code> 时，请先配置 <code>webui_admin_users</code>。</span>
+          </article>
+        </section>
 
-      <section class="panel" aria-labelledby="upload-heading">
-        <div class="panel-heading">
-          <div>
-            <h2 id="upload-heading">上传新语音</h2>
-            <p>填写触发关键词并选择一个音频文件；服务器会验证格式、大小和重复名称。</p>
+        <section id="audio-player-card" class="audio-player-card is-mini" hidden aria-labelledby="audio-player-title">
+          <div class="audio-player-heading">
+            <div>
+              <p class="eyebrow">正在试听</p>
+              <h2 id="audio-player-title">尚未选择语音</h2>
+              <p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>
+            </div>
+            <div class="audio-player-actions">
+              <button id="audio-player-mini-play" type="button" class="button button-secondary" aria-label="播放或暂停">播放</button>
+              <button id="audio-player-toggle" type="button" class="button button-secondary" aria-expanded="false">展开</button>
+            </div>
           </div>
-        </div>
-        <form id="upload-form">
-          <div class="upload-fields upload-grid">
+          <audio id="audio-player" controls preload="metadata"></audio>
+        </section>
+
+        <section class="panel" aria-labelledby="upload-heading">
+          <div class="panel-heading">
+            <div>
+              <h2 id="upload-heading">上传新语音</h2>
+              <p>填写主触发关键词并选择一个音频文件；服务器会验证格式、大小和关键词冲突。</p>
+            </div>
+          </div>
+          <form id="upload-form">
+            <div class="upload-fields upload-grid">
+              <label>
+                主触发关键词
+                <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
+              </label>
+              <label class="upload-file-field">
+                音频文件
+                <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*">
+                <small>Supported formats: .wav, .mp3, .ogg, .silk, .amr, .flac, .m4a</small>
+              </label>
+            </div>
+            <div class="upload-actions">
+              <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>
+              <button type="submit" class="button" data-mutation>上传语音</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel" aria-labelledby="browse-heading">
+          <div class="panel-heading">
+            <div>
+              <h2 id="browse-heading">浏览语音</h2>
+              <p>按主关键词搜索，或按来源筛选。</p>
+            </div>
+          </div>
+          <div class="filters">
             <label>
-              触发关键词
-              <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
+              搜索名称
+              <input id="search-input" type="search" placeholder="例如：生日快乐" autocomplete="off">
             </label>
-            <label class="upload-file-field">
-              音频文件
-              <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*">
-              <small>Supported formats: .wav, .mp3, .ogg, .silk, .amr, .flac, .m4a</small>
+            <label>
+              来源
+              <select id="source-filter">
+                <option value="">全部来源</option>
+                <option value="builtin">插件内置</option>
+                <option value="user_added">已上传</option>
+                <option value="extra_voices">额外目录</option>
+              </select>
             </label>
           </div>
-          <div class="upload-actions">
-            <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>
-            <button type="submit" class="button" data-mutation>上传语音</button>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <h3>没有找到语音</h3>
+            <p>请调整搜索条件，或上传一个新的音频文件。</p>
           </div>
-        </form>
+          <div class="table-wrap">
+            <table id="voice-table">
+              <caption class="sr-only">可用语音列表</caption>
+              <thead>
+                <tr><th scope="col">名称</th><th scope="col">来源</th><th scope="col">格式</th><th scope="col">大小</th><th scope="col">操作</th></tr>
+              </thead>
+              <tbody id="voice-list"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
-      <section class="panel" aria-labelledby="browse-heading">
-        <div class="panel-heading">
-          <div>
-            <h2 id="browse-heading">浏览语音</h2>
-            <p>按名称搜索，或按来源筛选。</p>
+      <section id="keyword-management-view" class="management-view" aria-labelledby="keywords-tab" hidden>
+        <section class="panel keyword-panel" aria-labelledby="keyword-heading">
+          <div class="panel-heading">
+            <div>
+              <h2 id="keyword-heading">关键词管理</h2>
+              <p>主关键词来自音频文件名；可为每条音频添加多个额外触发关键词。所有关键词全局唯一且忽略大小写。</p>
+            </div>
           </div>
-        </div>
-        <div class="filters">
-          <label>
-            搜索名称
-            <input id="search-input" type="search" placeholder="例如：生日快乐" autocomplete="off">
-          </label>
-          <label>
-            来源
-            <select id="source-filter">
-              <option value="">全部来源</option>
-              <option value="builtin">插件内置</option>
-              <option value="user_added">已上传</option>
-              <option value="extra_voices">额外目录</option>
-            </select>
-          </label>
-        </div>
 
-        <div id="empty-state" class="empty-state" hidden>
-          <h3>没有找到语音</h3>
-          <p>请调整搜索条件，或上传一个新的音频文件。</p>
-        </div>
-        <div class="table-wrap">
-          <table id="voice-table">
-            <caption class="sr-only">可用语音列表</caption>
-            <thead>
-              <tr><th scope="col">名称</th><th scope="col">来源</th><th scope="col">格式</th><th scope="col">大小</th><th scope="col">操作</th></tr>
-            </thead>
-            <tbody id="voice-list"></tbody>
-          </table>
-        </div>
+          <div id="keyword-empty-state" class="empty-state" hidden>
+            <h3>暂无可管理的关键词</h3>
+            <p>请先在音频管理中添加语音。</p>
+          </div>
+          <div class="table-wrap keyword-table-wrap">
+            <table id="keyword-table">
+              <caption class="sr-only">语音关键词与额外触发关键词列表</caption>
+              <thead>
+                <tr><th scope="col">主关键词</th><th scope="col">来源</th><th scope="col">额外触发关键词</th><th scope="col">添加关键词</th></tr>
+              </thead>
+              <tbody id="keyword-list"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
-
     </main>
 
     <dialog id="delete-dialog" aria-labelledby="delete-title">

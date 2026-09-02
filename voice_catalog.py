@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import json
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import unquote
@@ -7,6 +8,7 @@ from urllib.parse import unquote
 ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".silk", ".amr", ".flac", ".m4a"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SOURCES = ("builtin", "user_added", "extra_voices")
+ALIAS_STORE_FILENAME = "keyword_aliases.json"
 
 
 class CatalogError(ValueError):
@@ -25,6 +27,7 @@ class VoiceEntry:
     extension: str
     size: int
     available: bool
+    aliases: tuple[str, ...] = ()
 
 
 class VoiceCatalog:
@@ -35,9 +38,12 @@ class VoiceCatalog:
             "extra_voices": (Path(data_root) / "extra_voices").resolve(),
         }
         self.data_root = Path(data_root).resolve()
+        self.alias_store_path = self.data_root / ALIAS_STORE_FILENAME
         self.extra_voice_pool = tuple(extra_voice_pool or ())
         self._entries: dict[str, VoiceEntry] = {}
+        self._aliases: dict[str, list[str]] = {}
         self._voice_map: dict[str, str] = {}
+        self._trigger_map: dict[str, str] = {}
         self.refresh()
 
     def set_extra_voice_pool(self, extra_voice_pool: Iterable[str]) -> None:
@@ -70,10 +76,11 @@ class VoiceCatalog:
             if entry is not None:
                 entries.setdefault(entry.id, entry)
 
+        stored_aliases = self._load_alias_store()
+        pruned = {entry_id: aliases for entry_id, aliases in stored_aliases.items() if entry_id in entries}
+
         effective_keywords: dict[str, VoiceEntry] = {}
-        for entry in sorted(
-            entries.values(), key=lambda item: (item.name.casefold(), item.source, item.id)
-        ):
+        for entry in sorted(entries.values(), key=lambda item: (item.name.casefold(), item.source, item.id)):
             existing = effective_keywords.get(entry.name.casefold())
             if existing is not None:
                 raise CatalogError(
@@ -82,14 +89,94 @@ class VoiceCatalog:
                 )
             effective_keywords[entry.name.casefold()] = entry
 
-        self._entries = entries
+        entries_with_aliases: dict[str, VoiceEntry] = {}
+        clean_aliases: dict[str, list[str]] = {}
+        for entry in sorted(entries.values(), key=lambda item: (item.name.casefold(), item.source, item.id)):
+            aliases: list[str] = []
+            for raw_alias in pruned.get(entry.id, []):
+                alias = self.validate_keyword(raw_alias)
+                folded = alias.casefold()
+                existing = effective_keywords.get(folded)
+                if existing is not None:
+                    raise CatalogError(
+                        "duplicate_keyword",
+                        f"keyword '{alias}' is already used by '{existing.name}'",
+                    )
+                effective_keywords[folded] = entry
+                aliases.append(alias)
+            if aliases:
+                clean_aliases[entry.id] = aliases
+            entries_with_aliases[entry.id] = replace(entry, aliases=tuple(aliases))
+
+        self._entries = entries_with_aliases
+        self._aliases = clean_aliases
+
         voice_map: dict[str, str] = {}
+        trigger_map: dict[str, str] = {}
         for source in SOURCES:
             for entry in self._sorted_entries(source=source):
-                if entry.available:
-                    voice_map[entry.name] = str(entry.path)
+                if not entry.available:
+                    continue
+                path = str(entry.path)
+                voice_map[entry.name] = path
+                trigger_map[entry.name] = path
+                for alias in entry.aliases:
+                    trigger_map[alias] = path
         self._voice_map = voice_map
+        self._trigger_map = trigger_map
+
+        if stored_aliases != clean_aliases:
+            self._write_alias_store()
         return dict(self._voice_map)
+
+    def trigger_map(self) -> dict[str, str]:
+        return dict(self._trigger_map)
+
+    def aliases_for(self, entry_id: str) -> list[str]:
+        return list(self.resolve_entry(entry_id).aliases)
+
+    def add_alias(self, entry_id: str, alias: str) -> VoiceEntry:
+        entry = self.resolve_entry(entry_id)
+        value = self.validate_keyword(alias)
+        folded = value.casefold()
+        for existing in self._entries.values():
+            if existing.name.casefold() == folded:
+                raise CatalogError(
+                    "duplicate_keyword",
+                    f"关键词“{value}”已被“{existing.name}”使用",
+                )
+            for existing_alias in existing.aliases:
+                if existing_alias.casefold() == folded:
+                    raise CatalogError(
+                        "duplicate_keyword",
+                        f"关键词“{value}”已被“{existing.name}”使用",
+                    )
+
+        aliases = list(self._aliases.get(entry.id, []))
+        aliases.append(value)
+        self._aliases[entry.id] = aliases
+        self._write_alias_store()
+        self.refresh()
+        return self.resolve_entry(entry.id)
+
+    def remove_alias(self, entry_id: str, alias: str) -> VoiceEntry:
+        entry = self.resolve_entry(entry_id)
+        value = self.validate_keyword(alias)
+        aliases = list(self._aliases.get(entry.id, []))
+        match_index = next(
+            (index for index, existing in enumerate(aliases) if existing.casefold() == value.casefold()),
+            None,
+        )
+        if match_index is None:
+            raise CatalogError("not_found", "keyword alias was not found")
+        aliases.pop(match_index)
+        if aliases:
+            self._aliases[entry.id] = aliases
+        else:
+            self._aliases.pop(entry.id, None)
+        self._write_alias_store()
+        self.refresh()
+        return self.resolve_entry(entry.id)
 
     def list_entries(self, query: str = "", source: str | None = None) -> list[VoiceEntry]:
         if source is not None and source not in SOURCES:
@@ -114,6 +201,8 @@ class VoiceCatalog:
         if not entry.available:
             raise CatalogError("not_found", "voice entry does not exist")
         entry.path.unlink()
+        if self._aliases.pop(entry.id, None) is not None:
+            self._write_alias_store()
         self.refresh()
 
     def resolve_entry(self, entry_id: str) -> VoiceEntry:
@@ -140,13 +229,48 @@ class VoiceCatalog:
         if extension not in ALLOWED_EXTENSIONS:
             raise CatalogError("invalid_extension", "file extension is not allowed")
         name = self.validate_keyword(keyword)
-        if any(entry.name.casefold() == name.casefold() for entry in self._entries.values()):
-            raise CatalogError("duplicate_keyword", "voice keyword already exists")
+        folded = name.casefold()
+        for entry in self._entries.values():
+            if entry.name.casefold() == folded or any(alias.casefold() == folded for alias in entry.aliases):
+                raise CatalogError("duplicate_keyword", "voice keyword already exists")
         path = self.roots[source] / f"{name}{extension}"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         self.refresh()
         return self.resolve_entry(self._entry_id(source, path.relative_to(self.roots[source])))
+
+    def _load_alias_store(self) -> dict[str, list[str]]:
+        if not self.alias_store_path.is_file():
+            return {}
+        try:
+            payload = json.loads(self.alias_store_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CatalogError("invalid_alias_store", "keyword alias store is invalid") from exc
+        if not isinstance(payload, dict):
+            raise CatalogError("invalid_alias_store", "keyword alias store is invalid")
+        result: dict[str, list[str]] = {}
+        for entry_id, aliases in payload.items():
+            if not isinstance(entry_id, str) or not isinstance(aliases, list):
+                raise CatalogError("invalid_alias_store", "keyword alias store is invalid")
+            if any(not isinstance(alias, str) for alias in aliases):
+                raise CatalogError("invalid_alias_store", "keyword alias store is invalid")
+            if aliases:
+                result[entry_id] = list(aliases)
+        return result
+
+    def _write_alias_store(self) -> None:
+        self.data_root.mkdir(parents=True, exist_ok=True)
+        payload = {
+            entry_id: list(aliases)
+            for entry_id, aliases in sorted(self._aliases.items())
+            if aliases
+        }
+        temporary = self.alias_store_path.with_suffix(self.alias_store_path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(self.alias_store_path)
 
     def _entry_for_configured_path(self, configured_path: str) -> VoiceEntry | None:
         if not isinstance(configured_path, str) or not configured_path.strip():

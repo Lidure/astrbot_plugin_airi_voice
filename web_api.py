@@ -90,14 +90,7 @@ class _DashboardRequestEvent:
 
 
 def dashboard_request_is_admin(plugin: Any, username: Any) -> bool:
-    """Apply chat admin policy to a trusted authenticated Dashboard username.
-
-    AstrBot supplies ``request.username`` only from its authenticated Plugin
-    Pages context. In ``admin`` mode, the username must also be present in the
-    plugin config's ``webui_admin_users`` list; absent or malformed config is
-    denied. The existing plugin policy remains authoritative for ``all`` and
-    ``whitelist``.
-    """
+    """Apply chat admin policy to a trusted authenticated Dashboard username."""
 
     if getattr(plugin, "admin_mode", None) == "admin":
         if not isinstance(username, str) or not username.strip():
@@ -156,6 +149,12 @@ class VoiceManagementRoutes:
             "available": entry.available,
         }
 
+    @staticmethod
+    def _keyword_entry_json(entry: VoiceEntry) -> dict[str, Any]:
+        payload = VoiceManagementRoutes._entry_json(entry)
+        payload["aliases"] = list(getattr(entry, "aliases", ()) or ())
+        return payload
+
     async def list_voices(self) -> Any:
         try:
             query = self._web().request.query
@@ -172,6 +171,17 @@ class VoiceManagementRoutes:
         except Exception:
             LOGGER.exception("[AiriVoice] voice list WebUI request failed")
             return self._error("internal_error", "unable to list voices", 500)
+
+    async def list_keywords(self) -> Any:
+        try:
+            entries = self.plugin.catalog.list_entries()
+            items = [self._keyword_entry_json(entry) for entry in entries]
+            return self._json({"items": items, "total": len(items)})
+        except CatalogError as error:
+            return self._catalog_error(error)
+        except Exception:
+            LOGGER.exception("[AiriVoice] keyword list WebUI request failed")
+            return self._error("internal_error", "unable to list keywords", 500)
 
     async def get_audio(self, voice_id: str) -> Any:
         try:
@@ -222,6 +232,38 @@ class VoiceManagementRoutes:
             LOGGER.exception("[AiriVoice] voice upload WebUI request failed")
             return self._error("internal_error", "unable to upload voice", 500)
 
+    async def add_alias(self) -> Any:
+        if not self._is_admin():
+            return self._forbidden()
+        try:
+            query = self._web().request.query
+            voice_id = query.get("voice_id", "")
+            alias = query.get("alias", "")
+            entry = self.plugin.catalog.add_alias(voice_id, alias)
+            self.plugin.refresh_voice_catalog()
+            return self._json({"item": self._entry_json(entry)})
+        except CatalogError as error:
+            return self._catalog_error(error)
+        except Exception:
+            LOGGER.exception("[AiriVoice] keyword alias add WebUI request failed")
+            return self._error("internal_error", "unable to add keyword alias", 500)
+
+    async def remove_alias(self) -> Any:
+        if not self._is_admin():
+            return self._forbidden()
+        try:
+            query = self._web().request.query
+            voice_id = query.get("voice_id", "")
+            alias = query.get("alias", "")
+            entry = self.plugin.catalog.remove_alias(voice_id, alias)
+            self.plugin.refresh_voice_catalog()
+            return self._json({"item": self._entry_json(entry)})
+        except CatalogError as error:
+            return self._catalog_error(error)
+        except Exception:
+            LOGGER.exception("[AiriVoice] keyword alias remove WebUI request failed")
+            return self._error("internal_error", "unable to remove keyword alias", 500)
+
     async def delete_voice(self, voice_id: str) -> Any:
         if not self._is_admin():
             return self._forbidden()
@@ -268,6 +310,9 @@ def register_web_features(context: Any, plugin: Any) -> RegistrationResult:
         routes = VoiceManagementRoutes(plugin)
         for route, handler, methods, description in (
             (f"/{PLUGIN_NAME}/voices", routes.list_voices, ["GET"], "List voices"),
+            (f"/{PLUGIN_NAME}/keywords", routes.list_keywords, ["GET"], "List voice keywords"),
+            (f"/{PLUGIN_NAME}/keywords/aliases/add", routes.add_alias, ["POST"], "Add voice keyword alias"),
+            (f"/{PLUGIN_NAME}/keywords/aliases/remove", routes.remove_alias, ["POST"], "Remove voice keyword alias"),
             (f"/{PLUGIN_NAME}/voices/<voice_id>/audio", routes.get_audio, ["GET"], "Get voice audio"),
             (f"/{PLUGIN_NAME}/voices/upload", routes.upload_voice, ["POST"], "Upload voice"),
             (f"/{PLUGIN_NAME}/voices/upload/<keyword>", routes.upload_voice, ["POST"], "Upload voice with keyword"),
