@@ -37,7 +37,11 @@ def test_registers_a_discoverable_static_page_when_web_api_is_supported(tmp_path
 
     assert result.pages_registered is True
     assert result.api_registered is True
-    assert len(context.routes) == 7
+    assert len(context.routes) == 10
+    registered_paths = [route for route, *_ in context.routes]
+    assert "/astrbot_plugin_airi_voice/keywords" in registered_paths
+    assert "/astrbot_plugin_airi_voice/keywords/aliases/add" in registered_paths
+    assert "/astrbot_plugin_airi_voice/keywords/aliases/remove" in registered_paths
 
 
 def test_does_not_report_pages_registered_without_a_discoverable_index(tmp_path):
