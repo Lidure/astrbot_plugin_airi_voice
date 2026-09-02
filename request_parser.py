@@ -8,6 +8,7 @@ class ParsedRequest:
 
 
 _RANDOM_DISPATCH_ATTR = "__airi_random_voice_dispatched__"
+_RANDOM_ALL_PHRASES = {"随机语音", "随机发条语音"}
 
 
 def claim_random_dispatch(event: object) -> bool:
@@ -46,7 +47,13 @@ def match_trigger_keyword(text: str, voice_keys, fuzzy_match: bool = False) -> s
     return matches[0]
 
 
-def parse_request(text: str, enable_prefix: bool, trigger_mode: str, raw_text: str | None = None) -> ParsedRequest:
+def parse_request(
+    text: str,
+    enable_prefix: bool,
+    trigger_mode: str,
+    raw_text: str | None = None,
+    known_keywords=None,
+) -> ParsedRequest:
     text = (text or "").strip()
     raw = raw_text.strip() if isinstance(raw_text, str) else None
     command_text = raw if raw is not None else text
@@ -63,12 +70,31 @@ def parse_request(text: str, enable_prefix: bool, trigger_mode: str, raw_text: s
 
     if enable_prefix and raw is not None and raw.startswith("//随机"):
         return ParsedRequest("ignore")
+
     random_text = raw[1:].strip() if raw is not None and raw.startswith("/随机") else text
     has_single_prefix = raw is not None and raw.startswith("/随机")
-    if random_text in {"随机语音", "随机发条语音"}:
+
+    # Keep the two public random-all phrases reserved for backward compatibility.
+    if random_text in _RANDOM_ALL_PHRASES:
         if enable_prefix and random_text != "随机语音" and not has_single_prefix:
             return ParsedRequest("ignore")
         return ParsedRequest("random_all")
+
+    # An explicit /随机... command always keeps command semantics.
+    if has_single_prefix and random_text.startswith("随机"):
+        keyword = random_text[2:].strip()
+        return ParsedRequest("random_filter", keyword) if keyword else ParsedRequest("random_all")
+
+    # In direct mode, an existing exact voice keyword must not be swallowed only
+    # because its filename happens to start with the Chinese word “随机”.
+    known = {
+        item
+        for item in (known_keywords or ())
+        if isinstance(item, str) and item
+    }
+    if text in known:
+        return ParsedRequest("keyword", text)
+
     if random_text.startswith("随机"):
         keyword = random_text[2:].strip()
         if enable_prefix and not has_single_prefix:
