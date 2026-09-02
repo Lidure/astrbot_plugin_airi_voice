@@ -1,0 +1,74 @@
+name: Final v2.10 audio compatibility verification
+
+on:
+  push:
+    branches:
+      - verify/audio-trigger-compat-v210-final
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - name: Full regression suite
+        run: pytest -q
+      - name: Compile Python modules
+        run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py audio_compat.py
+      - name: Verify real MP3 without system ffmpeg and real SILK
+        shell: bash
+        run: |
+          python - <<'PY'
+          import asyncio
+          import tempfile
+          from pathlib import Path
+          import audio_compat
+
+          with tempfile.TemporaryDirectory() as td:
+              cache = Path(td) / "cache"
+              compat = audio_compat.AudioSendCompat(cache)
+
+              original_which = audio_compat.shutil.which
+              audio_compat.shutil.which = lambda name: None
+              try:
+                  mp3 = Path(asyncio.run(compat.prepare(Path("voices/生辰快乐.mp3"))))
+              finally:
+                  audio_compat.shutil.which = original_which
+              mp3_data = mp3.read_bytes()
+              assert mp3_data[:4] == b"RIFF" and mp3_data[8:12] == b"WAVE"
+              assert len(mp3_data) > 44
+              print(f"mp3_no_system_ffmpeg={len(mp3_data)}")
+
+              silk = Path(asyncio.run(compat.prepare(Path("voices/打卡啦摩托.silk"))))
+              silk_data = silk.read_bytes()
+              assert silk_data[:4] == b"RIFF" and silk_data[8:12] == b"WAVE"
+              assert len(silk_data) > 44
+              print(f"silk={len(silk_data)}")
+          PY
+      - name: Verify random-keyword parser boundaries
+        shell: bash
+        run: |
+          python - <<'PY'
+          from request_parser import ParsedRequest, parse_request
+          assert parse_request("随机猫", False, "direct", known_keywords={"随机猫"}) == ParsedRequest("keyword", "随机猫")
+          assert parse_request("随机猫", True, "direct", raw_text="/随机猫", known_keywords={"随机猫"}) == ParsedRequest("random_filter", "猫")
+          assert parse_request("随机语音", False, "direct", known_keywords={"随机语音"}) == ParsedRequest("random_all")
+          PY
+      - name: Verify send centralization and release metadata
+        shell: bash
+        run: |
+          test "$(grep -c 'Record.fromFileSystem' main.py)" -eq 1
+          grep -q 'return Record.fromFileSystem(prepared_path)' main.py
+          grep -q 'known_keywords=self.voice_map.keys()' main.py
+          grep -q 'av>=17.1.0,<19' requirements.txt
+          grep -q 'version: v2.10.0' metadata.yaml
+          grep -q '"2.10.0"' main.py
+          grep -q 'Version-2.10.0-orange' README.md
+      - name: Verify formal feature diff is clean
+        run: git diff --check origin/master...81a7608bcd1f2320a8a3d52eeb6c5da315746c95
