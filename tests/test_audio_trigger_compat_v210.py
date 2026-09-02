@@ -79,6 +79,21 @@ def test_non_wav_conversion_is_cached_and_reused(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_builtin_mp3_converts_to_valid_wav_without_system_ffmpeg(tmp_path, monkeypatch):
+    module = _audio_compat_module()
+    source = ROOT / "voices" / "生辰快乐.mp3"
+    monkeypatch.setattr(module.shutil, "which", lambda name: None)
+    compat = module.AudioSendCompat(tmp_path / "cache")
+
+    output = Path(asyncio.run(compat.prepare(source)))
+    data = output.read_bytes()
+
+    assert output.suffix == ".wav"
+    assert data[:4] == b"RIFF"
+    assert data[8:12] == b"WAVE"
+    assert len(data) > 44
+
+
 def test_silk_decoder_is_shared_with_web_preview():
     module = _audio_compat_module()
     web_api = (ROOT / "web_api.py").read_text(encoding="utf-8")
