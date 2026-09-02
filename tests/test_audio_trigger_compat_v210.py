@@ -1,12 +1,14 @@
 import asyncio
 import importlib
 import importlib.util
+import sys
 from pathlib import Path
-
-from request_parser import ParsedRequest, parse_request
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from request_parser import ParsedRequest, parse_request
 
 
 def _audio_compat_module():
