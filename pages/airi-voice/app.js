@@ -5,6 +5,7 @@
     items: [],
     keywordItems: [],
     query: "",
+    keywordQuery: "",
     source: "",
     activeView: "audio",
     loading: false,
@@ -32,6 +33,7 @@
     keywordList: document.getElementById("keyword-list"),
     keywordTable: document.getElementById("keyword-table"),
     keywordEmpty: document.getElementById("keyword-empty-state"),
+    keywordSearch: document.getElementById("keyword-search-input"),
     uploadForm: document.getElementById("upload-form"),
     keyword: document.getElementById("keyword-input"),
     file: document.getElementById("file-input"),
@@ -217,12 +219,28 @@
     }
   }
 
-  function renderKeywords() {
-    elements.keywordList.replaceChildren();
-    elements.keywordEmpty.hidden = state.keywordItems.length !== 0;
-    elements.keywordTable.hidden = state.keywordItems.length === 0;
+  function filteredKeywordItems() {
+    const query = state.keywordQuery.trim().toLocaleLowerCase();
+    if (!query) return state.keywordItems;
+    return state.keywordItems.filter((item) => {
+      const primary = String(item.name || "").toLocaleLowerCase();
+      const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+      return primary.includes(query) || aliases.some((alias) => String(alias).toLocaleLowerCase().includes(query));
+    });
+  }
 
-    for (const item of state.keywordItems) {
+  function renderKeywords() {
+    const visibleItems = filteredKeywordItems();
+    elements.keywordList.replaceChildren();
+    elements.keywordEmpty.hidden = visibleItems.length !== 0;
+    elements.keywordTable.hidden = visibleItems.length === 0;
+    const visibleAliasTotal = visibleItems.reduce(
+      (total, item) => total + (Array.isArray(item.aliases) ? item.aliases.length : 0),
+      0,
+    );
+    elements.status.textContent = `当前显示 ${visibleItems.length} / ${state.keywordItems.length} 个主关键词，${visibleAliasTotal} 个额外触发关键词。`;
+
+    for (const item of visibleItems) {
       const row = document.createElement("tr");
       const primary = document.createElement("td");
       const primaryName = document.createElement("strong");
@@ -316,11 +334,6 @@
       const payload = await readResponse(response);
       state.keywordItems = Array.isArray(payload && payload.items) ? payload.items : [];
       renderKeywords();
-      const aliasTotal = state.keywordItems.reduce(
-        (total, item) => total + (Array.isArray(item.aliases) ? item.aliases.length : 0),
-        0,
-      );
-      elements.status.textContent = `共 ${state.keywordItems.length} 个主关键词，${aliasTotal} 个额外触发关键词。`;
     } catch (error) {
       state.keywordItems = [];
       renderKeywords();
@@ -481,6 +494,10 @@
   }
 
   elements.search.addEventListener("input", () => { state.query = elements.search.value.trim(); loadVoices(); });
+  elements.keywordSearch.addEventListener("input", () => {
+    state.keywordQuery = elements.keywordSearch.value.trim();
+    renderKeywords();
+  });
   elements.source.addEventListener("change", () => { state.source = elements.source.value; loadVoices(); });
   elements.refresh.addEventListener("click", reloadVoices);
   elements.audioTab.addEventListener("click", () => setActiveView("audio"));

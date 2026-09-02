@@ -129,9 +129,16 @@
             </div>
           </div>
 
+          <div class="filters keyword-filters">
+            <label>
+              搜索关键词
+              <input id="keyword-search-input" type="search" placeholder="搜索主关键词或额外关键词" autocomplete="off">
+            </label>
+          </div>
+
           <div id="keyword-empty-state" class="empty-state" hidden>
-            <h3>暂无可管理的关键词</h3>
-            <p>请先在音频管理中添加语音。</p>
+            <h3>没有找到匹配的关键词</h3>
+            <p>请调整搜索条件，或先在音频管理中添加语音。</p>
           </div>
           <div class="table-wrap keyword-table-wrap">
             <table id="keyword-table">
