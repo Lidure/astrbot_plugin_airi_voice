@@ -211,6 +211,8 @@ class VoiceManagementRoutes:
                 data = await data
             if keyword is None:
                 keyword = form.get("keyword") or request.query.get("keyword", "")
+            if not keyword:
+                keyword = Path(upload.filename).stem
             entry = self.plugin.catalog.save_upload(upload.filename, keyword, data)
             self.plugin.refresh_voice_catalog()
             return self._json({"item": self._entry_json(entry)})

@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.9.8-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.9.9-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -96,11 +96,11 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ---
 
-## 🖥️ WebUI 语音管理（v2.9.8）
+## 🖥️ WebUI 语音管理（v2.9.9）
 
 支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；打开后可搜索、按来源筛选、试听、上传、删除和重载语音。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
 
-v2.9.8 修复了 `/随机...` 被多个 AstrBot 处理器同时接收时重复发送语音的问题；WebUI 现在允许有权限的管理员删除插件内置 `voices/` 语音，并会在试听 `.silk` 时自动解码为浏览器可播放的 WAV。普通 MP3/WAV/OGG 等格式继续直接预览。
+v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。
 
 > 低版本 AstrBot 不支持 Plugin Pages / Web API 时，插件仍可正常加载；请继续使用聊天命令和插件配置页管理语音。WebUI 的实际页面发现、桥接和权限行为仍需要在目标 AstrBot Dashboard 中手动验证。
 
