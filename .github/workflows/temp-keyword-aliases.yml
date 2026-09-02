@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Keep slash random on primary keyword pool
+      - name: Keep reported voice counts on primary audio entries
         shell: bash
         run: |
           python - <<'PY'
@@ -28,16 +28,12 @@ jobs:
           text = path.read_text(encoding="utf-8")
           replacements = [
               (
-                  "            name = random.choice(list(self.voice_map.keys()))\n            matched_path = self.voice_map.get(name)\n",
-                  "            name = random.choice(list(self.primary_voice_map.keys()))\n            matched_path = self.primary_voice_map.get(name)\n",
+                  'logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}，列表图片模式：{\'开启\' if self.list_as_image else \'关闭\'}")',
+                  'logger.info(f"[AiriVoice] 初始化完成，共 {len(self.primary_voice_map)} 个语音，权限模式：{self.admin_mode}，列表图片模式：{\'开启\' if self.list_as_image else \'关闭\'}")',
               ),
               (
-                  "        candidates = [name for name in self.voice_map if match.group(1).strip() in name]\n",
-                  "        candidates = [name for name in self.primary_voice_map if match.group(1).strip() in name]\n",
-              ),
-              (
-                  "        matched_path = self.voice_map[random.choice(candidates)]\n",
-                  "        matched_path = self.primary_voice_map[random.choice(candidates)]\n",
+                  'yield event.plain_result(f"✅ 已重新加载，共 {len(self.voice_map)} 个语音")',
+                  'yield event.plain_result(f"✅ 已重新加载，共 {len(self.primary_voice_map)} 个语音")',
               ),
           ]
           changed = False
@@ -52,16 +48,16 @@ jobs:
           if changed:
               path.write_text(text, encoding="utf-8")
           PY
-      - name: Commit slash random fix
+      - name: Commit primary voice count fix
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "Slash random fix already present"
+            echo "Primary voice count fix already present"
           else
             git config user.name "Lidure"
             git config user.email "101858375+Lidure@users.noreply.github.com"
             git add main.py
-            git commit -m "fix: keep aliases out of slash random pool"
+            git commit -m "fix: report primary audio counts with aliases"
             git push origin HEAD:feat/webui-keyword-aliases
           fi
       - run: python -m pip install --upgrade pip
