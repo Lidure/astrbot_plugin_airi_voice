@@ -1,0 +1,18 @@
+name: Temporary v2.10.1 optional WAV RED
+
+on:
+  push:
+    branches:
+      - fix/optional-wav-conversion-v2.10.1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q tests/test_optional_wav_conversion_v2101.py
