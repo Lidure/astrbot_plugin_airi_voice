@@ -4,11 +4,7 @@
     "type": "string",
     "hint": "direct: 直接输入关键词；prefix: 必须用 #voice 前缀；llm: 仅注册 LLM 工具，由大模型调用语音功能",
     "default": "direct",
-    "options": [
-      "direct",
-      "prefix",
-      "llm"
-    ]
+    "options": ["direct", "prefix", "llm"]
   },
   "enable_prefix": {
     "description": "随机关键词启用 / 前缀",
@@ -33,11 +29,7 @@
     "type": "string",
     "hint": "all: 所有人可用；admin: 仅平台管理员；whitelist: 仅白名单用户",
     "default": "whitelist",
-    "options": [
-      "all",
-      "admin",
-      "whitelist"
-    ]
+    "options": ["all", "admin", "whitelist"]
   },
   "admin_whitelist": {
     "description": "管理员白名单",
@@ -80,20 +72,14 @@
     "type": "string",
     "hint": "list/keyword 为 LLM 选择语音的偏好策略提示。插件仍会同时提供 list/search/random/send 工具，LLM 可按需调用。",
     "default": "list",
-    "options": [
-      "list",
-      "keyword"
-    ]
+    "options": ["list", "keyword"]
   },
   "llm_tools_inject_mode": {
     "description": "LLM 工具注入策略",
     "type": "string",
     "hint": "always: 每次对话都注入语音工具，由模型自行判断是否调用；on_demand: 仅当命中“发/发送/随机/语音列表/搜索语音”等语音意图时才注入工具，可显著降低输入 token",
     "default": "always",
-    "options": [
-      "always",
-      "on_demand"
-    ]
+    "options": ["always", "on_demand"]
   },
   "llm_max_voices_per_request": {
     "description": "LLM 单次语音发送上限",
