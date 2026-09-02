@@ -5,6 +5,9 @@ on:
     branches:
       - fix/webui-upload-404
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +18,82 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Apply bounded upload-route fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if new in text:
+                  return False
+              if old not in text:
+                  raise SystemExit(f"{path}: expected source block was not found")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+              return True
+
+          changed = False
+          changed |= replace_once(
+              "pages/airi-voice/app.js",
+              '''      const endpoint = `voices/upload/${encodeURIComponent(keyword)}`;\n      const response = await bridge().upload(endpoint, file);''',
+              '''      const dotIndex = file.name.lastIndexOf(".");\n      const extension = dotIndex >= 0 ? file.name.slice(dotIndex) : "";\n      const uploadFile = new File([file], `${keyword}${extension}`, {\n        type: file.type,\n        lastModified: file.lastModified,\n      });\n      const response = await bridge().upload("voices/upload", uploadFile);''',
+          )
+          changed |= replace_once(
+              "web_api.py",
+              '''            if keyword is None:\n                keyword = form.get("keyword") or request.query.get("keyword", "")\n            entry = self.plugin.catalog.save_upload(upload.filename, keyword, data)''',
+              '''            if keyword is None:\n                keyword = form.get("keyword") or request.query.get("keyword", "")\n            if not keyword:\n                keyword = Path(upload.filename).stem\n            entry = self.plugin.catalog.save_upload(upload.filename, keyword, data)''',
+          )
+          changed |= replace_once(
+              "main.py",
+              '''    "输入关键词发送对应语音",\n    "2.9.8",''',
+              '''    "输入关键词发送对应语音",\n    "2.9.9",''',
+          )
+          changed |= replace_once(
+              "metadata.yaml",
+              '''version: v2.9.8 # 插件版本号。格式：v1.1.1 或者 v1.1''',
+              '''version: v2.9.9 # 插件版本号。格式：v1.1.1 或者 v1.1''',
+          )
+          changed |= replace_once(
+              "README.md",
+              '''[![Version](https://img.shields.io/badge/Version-2.9.8-orange?style=for-the-badge)]()''',
+              '''[![Version](https://img.shields.io/badge/Version-2.9.9-orange?style=for-the-badge)]()''',
+          )
+          changed |= replace_once(
+              "README.md",
+              '''## 🖥️ WebUI 语音管理（v2.9.8）''',
+              '''## 🖥️ WebUI 语音管理（v2.9.9）''',
+          )
+          changed |= replace_once(
+              "README.md",
+              '''v2.9.8 修复了 `/随机...` 被多个 AstrBot 处理器同时接收时重复发送语音的问题；WebUI 现在允许有权限的管理员删除插件内置 `voices/` 语音，并会在试听 `.silk` 时自动解码为浏览器可播放的 WAV。普通 MP3/WAV/OGG 等格式继续直接预览。''',
+              '''v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 的问题：上传现在严格使用 AstrBot Plugin Pages bridge 的固定 `voices/upload` endpoint，并通过上传文件名携带用户填写的关键词。v2.9.8 的随机语音去重、内置语音删除和 `.silk` 自动转 WAV 试听功能继续保留。''',
+          )
+          changed |= replace_once(
+              "CHANGELOG.md",
+              '''---\n\n## [2.9.8] - 2026-08-26''',
+              '''---\n\n## [2.9.9] - 2026-09-02\n\n### 修复\n\n- 修复 WebUI 上传音频时报 `Request failed with status code 404` 的问题。\n- Plugin Pages 上传改为官方 bridge 约定的固定 `voices/upload` endpoint，不再把关键词拼进动态上传路径。\n- WebUI 会将用户填写的关键词写入待上传文件名；后端在固定上传路由下可从文件名恢复关键词，同时保留原有表单、查询参数和旧动态路由兼容。\n\n## [2.9.8] - 2026-08-26''',
+          )
+          changed |= replace_once(
+              "docs/superpowers/verification/2026-08-03-airi-voice-webui-mvp.md",
+              '''verify the upload uses `bridge.upload("voices/upload/<encoded-keyword>", file)` and reaches the keyword-bearing upload route successfully.''',
+              '''verify the upload uses the fixed `bridge.upload("voices/upload", uploadFile)` endpoint and reaches the registered upload route successfully.''',
+          )
+          print("changed" if changed else "already applied")
+          PY
+      - name: Commit bounded fix when needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No source changes to commit"
+          else
+            git config user.name "Lidure"
+            git config user.email "101858375+Lidure@users.noreply.github.com"
+            git add pages/airi-voice/app.js web_api.py main.py metadata.yaml README.md CHANGELOG.md docs/superpowers/verification/2026-08-03-airi-voice-webui-mvp.md
+            git commit -m "fix: use fixed Plugin Pages upload endpoint"
+            git push origin HEAD:fix/webui-upload-404
+          fi
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
       - run: pytest -q
