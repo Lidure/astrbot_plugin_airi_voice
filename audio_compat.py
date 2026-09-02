@@ -56,6 +56,47 @@ def _prune_stale_cache(cache_dir: Path, path_key: str, keep: Path) -> None:
             pass
 
 
+def _pyav_convert(source: Path, target: Path) -> None:
+    """Convert an audio file to mono PCM WAV using PyAV's bundled codecs."""
+
+    import av
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    input_container = av.open(str(source), mode="r")
+    output_container = av.open(str(target), mode="w", format="wav")
+    try:
+        if not input_container.streams.audio:
+            raise RuntimeError("source contains no audio stream")
+
+        input_stream = input_container.streams.audio[0]
+        output_stream = output_container.add_stream("pcm_s16le", rate=FALLBACK_WAV_RATE)
+        output_stream.codec_context.layout = "mono"
+        resampler = av.audio.resampler.AudioResampler(
+            format="s16",
+            layout="mono",
+            rate=FALLBACK_WAV_RATE,
+        )
+
+        def encode_frame(frame) -> None:
+            for packet in output_stream.encode(frame):
+                output_container.mux(packet)
+
+        for frame in input_container.decode(input_stream):
+            for converted_frame in resampler.resample(frame):
+                encode_frame(converted_frame)
+
+        for converted_frame in resampler.resample(None):
+            encode_frame(converted_frame)
+        for packet in output_stream.encode(None):
+            output_container.mux(packet)
+    finally:
+        output_container.close()
+        input_container.close()
+
+    if not target.is_file() or target.stat().st_size <= 44:
+        raise RuntimeError("PyAV produced an empty WAV file")
+
+
 def _ffmpeg_convert(source: Path, target: Path) -> None:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -87,7 +128,7 @@ def _ffmpeg_convert(source: Path, target: Path) -> None:
 
 
 async def _convert_standard_audio(source: Path, target: Path) -> None:
-    """Convert common audio formats to WAV using AstrBot first, ffmpeg second."""
+    """Convert common audio to WAV via AstrBot, bundled PyAV, then ffmpeg."""
 
     resolver_error: Exception | None = None
     try:
@@ -106,12 +147,25 @@ async def _convert_standard_audio(source: Path, target: Path) -> None:
     except Exception as exc:
         resolver_error = exc
 
+    pyav_error: Exception | None = None
+    try:
+        await asyncio.to_thread(_pyav_convert, source, target)
+        return
+    except Exception as exc:
+        pyav_error = exc
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     try:
         await asyncio.to_thread(_ffmpeg_convert, source, target)
     except Exception as ffmpeg_error:
         raise RuntimeError(
-            f"audio conversion failed via AstrBot MediaResolver ({type(resolver_error).__name__}) "
-            f"and ffmpeg ({type(ffmpeg_error).__name__})"
+            "audio conversion failed via "
+            f"AstrBot MediaResolver ({type(resolver_error).__name__}), "
+            f"PyAV ({type(pyav_error).__name__}), and "
+            f"ffmpeg ({type(ffmpeg_error).__name__})"
         ) from ffmpeg_error
 
 
