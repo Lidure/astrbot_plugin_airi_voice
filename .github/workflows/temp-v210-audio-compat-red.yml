@@ -1,4 +1,4 @@
-name: Temporary v2.10 audio compatibility GREEN
+name: Temporary v2.10 finalization
 
 on:
   push:
@@ -18,149 +18,49 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Apply remaining v2.10 implementation
+      - name: Finalize v2.10 documentation
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path_str, old, new):
-              path = Path(path_str)
-              text = path.read_text(encoding="utf-8")
-              if new in text:
-                  return
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"expected one replacement in {path_str}, found {count}: {old[:80]!r}")
-              path.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          def replace_all_count(path_str, old, new, expected):
-              path = Path(path_str)
-              text = path.read_text(encoding="utf-8")
-              if old not in text:
-                  if text.count(new) >= expected:
-                      return
-                  raise SystemExit(f"replacement target missing in {path_str}: {old[:80]!r}")
-              count = text.count(old)
-              if count != expected:
-                  raise SystemExit(f"expected {expected} replacements in {path_str}, found {count}")
-              path.write_text(text.replace(old, new), encoding="utf-8")
-
-          # main.py: shared compatibility layer, version, parser awareness, all send sites.
-          replace_once(
-              "main.py",
-              "if __package__:\n    from .web_api import dashboard_request_is_admin, register_web_features\n",
-              "if __package__:\n    from .audio_compat import AudioSendCompat\n    from .web_api import dashboard_request_is_admin, register_web_features\n",
-          )
-          replace_once(
-              "main.py",
-              "else:\n    from web_api import dashboard_request_is_admin, register_web_features\n",
-              "else:\n    from audio_compat import AudioSendCompat\n    from web_api import dashboard_request_is_admin, register_web_features\n",
-          )
-          replace_once("main.py", '    "2.9.9",\n', '    "2.10.0",\n')
-          replace_once(
-              "main.py",
-              "        self.extra_voice_dir = self.data_dir / \"extra_voices\"\n        self.extra_voice_dir.mkdir(parents=True, exist_ok=True)\n",
-              "        self.extra_voice_dir = self.data_dir / \"extra_voices\"\n        self.extra_voice_dir.mkdir(parents=True, exist_ok=True)\n        self.audio_send_compat = AudioSendCompat(self.data_dir / \"send_cache\")\n",
-          )
-          replace_once(
-              "main.py",
-              "    def _sync_catalog_state(self):\n",
-              "    async def _record_for_voice(self, path: str):\n        prepared_path = await self.audio_send_compat.prepare(path)\n        if prepared_path != str(Path(path).resolve()):\n            logger.debug(f\"[AiriVoice] 发送前已转换为 WAV：{path} -> {prepared_path}\")\n        return Record.fromFileSystem(prepared_path)\n\n    def _sync_catalog_state(self):\n",
-          )
-          replace_once(
-              "main.py",
-              "        request = parse_request(text, self.enable_prefix, self.trigger_mode, raw_text)\n",
-              "        request = parse_request(\n            text,\n            self.enable_prefix,\n            self.trigger_mode,\n            raw_text,\n            known_keywords=self.voice_map.keys(),\n        )\n",
-          )
-          replace_all_count(
-              "main.py",
-              "MessageChain([Record.fromFileSystem(path)])",
-              "MessageChain([await self.plugin._record_for_voice(path)])",
-              3,
-          )
-          replace_all_count(
-              "main.py",
-              "yield event.chain_result([Record.fromFileSystem(matched_path)])",
-              "yield event.chain_result([await self._record_for_voice(matched_path)])",
-              5,
-          )
-          replace_once(
-              "main.py",
-              "                        result.chain.append(Record.fromFileSystem(path))\n",
-              "                        result.chain.append(await self._record_for_voice(path))\n",
-          )
-
-          # Web preview reuses the same SILK decoder as chat sending.
-          replace_once(
-              "web_api.py",
-              "if __package__:\n    from .voice_catalog import CatalogError, VoiceEntry\nelse:\n    from voice_catalog import CatalogError, VoiceEntry\n",
-              "if __package__:\n    from .audio_compat import decode_silk_to_wav_bytes\n    from .voice_catalog import CatalogError, VoiceEntry\nelse:\n    from audio_compat import decode_silk_to_wav_bytes\n    from voice_catalog import CatalogError, VoiceEntry\n",
-          )
-          web = Path("web_api.py")
-          text = web.read_text(encoding="utf-8")
-          start = text.find("def _decode_silk_to_wav(path: Path) -> bytes:\n")
-          end = text.find("\n\n@dataclass(frozen=True)\nclass RegistrationResult:", start)
-          wrapper = "def _decode_silk_to_wav(path: Path) -> bytes:\n    return decode_silk_to_wav_bytes(path)\n"
-          if start >= 0 and end >= 0:
-              text = text[:start] + wrapper + text[end:]
-              text = text.replace("import io\n", "", 1).replace("import wave\n", "", 1)
-              text = text.replace("SILK_PREVIEW_RATE = 24000\n\n", "", 1)
-              web.write_text(text, encoding="utf-8")
-          elif wrapper not in text:
-              raise SystemExit("web_api SILK helper block not found")
-
-          # Release version.
-          replace_once(
-              "metadata.yaml",
-              "version: v2.9.9 # 插件版本号。格式：v1.1.1 或者 v1.1\n",
-              "version: v2.10.0 # 插件版本号。格式：v1.1.1 或者 v1.1\n",
-          )
-
-          aliases_test = Path("tests/test_keyword_aliases.py")
-          text = aliases_test.read_text(encoding="utf-8")
-          text = text.replace("def test_feature_does_not_bump_release_version():", "def test_keyword_alias_feature_is_in_v210_release():")
-          text = text.replace("version: v2.9.9", "version: v2.10.0")
-          text = text.replace("'\"2.9.9\"'", "'\"2.10.0\"'")
-          aliases_test.write_text(text, encoding="utf-8")
-
-          # README and changelog release notes.
           readme = Path("README.md")
           text = readme.read_text(encoding="utf-8")
-          text = text.replace("## 🖥️ WebUI 音频与关键词管理（v2.9.9）", "## 🖥️ WebUI 音频与关键词管理（v2.10.0）")
-          note = "> 🔊 **v2.10.0 发送兼容性**：聊天发送统一先准备为 WAV。原 WAV 直接发送；MP3/OGG/FLAC/M4A/AMR 优先复用 AstrBot MediaResolver 转换，旧版环境回退到 ffmpeg；SILK 使用插件已有的 silk-python 解码。转换结果缓存到插件数据目录 `send_cache`，源文件变化后自动生成新缓存。"
-          marker = "> 💡 可在插件配置中开启 `fuzzy_keyword_match`（模糊匹配）。开启后，用户消息只要包含主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。Prefix 模式仍要求 `#voice` 前缀，LLM 模式不受该开关影响。默认关闭。"
-          if note not in text:
-              if marker not in text:
-                  raise SystemExit("README fuzzy note marker missing")
-              text = text.replace(marker, marker + "\n\n" + note, 1)
+          text = text.replace("Version-2.9.9-orange", "Version-2.10.0-orange")
+          text = text.replace(
+              "> 🔊 **v2.10.0 发送兼容性**：聊天发送统一先准备为 WAV。原 WAV 直接发送；MP3/OGG/FLAC/M4A/AMR 优先复用 AstrBot MediaResolver 转换，旧版环境回退到 ffmpeg；SILK 使用插件已有的 silk-python 解码。转换结果缓存到插件数据目录 `send_cache`，源文件变化后自动生成新缓存。",
+              "> 🔊 **v2.10.0 发送兼容性**：聊天发送统一先准备为 WAV。原 WAV 直接发送；MP3/OGG/FLAC/M4A/AMR 优先复用 AstrBot MediaResolver，失败时使用插件依赖的 PyAV 自带编解码库转换，最后才尝试系统 ffmpeg；SILK 复用 silk-python 解码。转换结果缓存到插件数据目录 `send_cache`，源文件变化后自动生成新缓存。",
+          )
+          text = text.replace(
+              "当前开发版在不变更版本号的前提下新增关键词管理：主关键词与额外关键词都能触发同一音频，额外关键词持久化在插件数据目录的 `keyword_aliases.json` 中；主关键词与所有别名全局唯一并忽略大小写。",
+              "v2.10.0 延续关键词管理能力：主关键词与额外关键词都能触发同一音频，额外关键词持久化在插件数据目录的 `keyword_aliases.json` 中；主关键词与所有别名全局唯一并忽略大小写。",
+          )
           readme.write_text(text, encoding="utf-8")
 
           changelog = Path("CHANGELOG.md")
           text = changelog.read_text(encoding="utf-8")
-          if "## [2.10.0] - 2026-09-02" not in text:
-              text = text.replace("## [Unreleased] - 2026-09-02", "## [Unreleased]\n\n## [2.10.0] - 2026-09-02", 1)
-          fixes = (
-              "- 修复合法主关键词/别名以“随机”开头时会被随机命令解析抢占的问题；未加 `/` 的精确已存在关键词现在优先作为语音关键词，`随机语音` 等保留命令及显式 `/随机...` 行为不变。\n"
-              "- 修复部分音频名称正确但平台发送失败的问题：所有聊天语音发送统一经过 WAV 兼容层，支持 AstrBot MediaResolver、ffmpeg 回退与 SILK 解码，并按源文件版本缓存转换结果。\n"
+          text = text.replace(
+              "- 修复部分音频名称正确但平台发送失败的问题：所有聊天语音发送统一经过 WAV 兼容层，支持 AstrBot MediaResolver、ffmpeg 回退与 SILK 解码，并按源文件版本缓存转换结果。",
+              "- 修复部分音频名称正确但平台发送失败的问题：所有聊天语音发送统一经过 WAV 兼容层，依次支持 AstrBot MediaResolver、PyAV 自带编解码回退、系统 ffmpeg 兜底与 SILK 解码，并按源文件版本缓存转换结果。",
           )
-          if fixes.splitlines()[0] not in text:
-              marker = "### 修复\n\n"
+          dep = "### 依赖\n\n- 新增 `av>=17.1.0,<19`（PyAV），用于系统未安装 ffmpeg 时仍可将常见音频格式转换为 WAV；PyPI 提供 Linux x86_64 与 ARM64/aarch64 预编译 wheel。\n\n"
+          marker = "## [2.9.9] - 2026-09-02\n"
+          if dep not in text:
               if marker not in text:
-                  raise SystemExit("CHANGELOG fix section missing")
-              text = text.replace(marker, marker + fixes, 1)
+                  raise SystemExit("2.9.9 changelog marker missing")
+              text = text.replace(marker, dep + marker, 1)
           changelog.write_text(text, encoding="utf-8")
           PY
-      - name: Commit implementation if needed
+      - name: Commit documentation if needed
         shell: bash
         run: |
           if git diff --quiet; then
-            echo "Implementation already applied"
+            echo "Documentation already finalized"
           else
             git config user.name "Lidure"
             git config user.email "101858375+Lidure@users.noreply.github.com"
-            git add main.py web_api.py metadata.yaml README.md CHANGELOG.md tests/test_keyword_aliases.py
-            git commit -m "fix: normalize voice sending through WAV compatibility layer"
+            git add README.md CHANGELOG.md
+            git commit -m "docs: finalize v2.10 audio compatibility notes"
             git push origin HEAD:fix/audio-trigger-compat-v2.10.0
           fi
       - run: python -m pip install --upgrade pip
@@ -185,14 +85,14 @@ jobs:
                   assert data[:4] == b"RIFF" and data[8:12] == b"WAVE", (source, output)
                   print(f"converted {source} -> {output.name} ({len(data)} bytes)")
           PY
-      - name: Verify all main.py voice sends are centralized
+      - name: Verify release contracts
         shell: bash
         run: |
           test "$(grep -c 'Record.fromFileSystem' main.py)" -eq 1
           grep -q 'return Record.fromFileSystem(prepared_path)' main.py
           grep -q 'known_keywords=self.voice_map.keys()' main.py
-      - name: Verify v2.10.0 version
-        run: |
+          grep -q 'av>=17.1.0,<19' requirements.txt
           grep -q 'version: v2.10.0' metadata.yaml
           grep -q '"2.10.0"' main.py
+          grep -q 'Version-2.10.0-orange' README.md
       - run: git diff --check origin/master...HEAD
