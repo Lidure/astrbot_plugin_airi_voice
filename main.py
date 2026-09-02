@@ -1658,7 +1658,7 @@ class AiriVoice(Star):
 
         logger.debug(f"[AiriVoice-auto] bot 回复文本待检查: {text!r}")
 
-        for keyword in self.sorted_keys:
+        for keyword in sorted(self.voice_map.keys()):
             if keyword in text:
                 path = self.voice_map.get(keyword)
                 if path:
