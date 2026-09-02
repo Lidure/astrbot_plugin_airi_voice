@@ -1,0 +1,23 @@
+name: Temporary upload regression verification
+
+on:
+  push:
+    branches:
+      - fix/webui-upload-404
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q
+      - run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py
+      - run: python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"
+      - run: git diff --check origin/master...HEAD
