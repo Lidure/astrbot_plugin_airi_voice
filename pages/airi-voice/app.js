@@ -204,8 +204,13 @@
     setLoading(true, "正在上传语音…");
     showError(null);
     try {
-      const endpoint = `voices/upload/${encodeURIComponent(keyword)}`;
-      const response = await bridge().upload(endpoint, file);
+      const dotIndex = file.name.lastIndexOf(".");
+      const extension = dotIndex >= 0 ? file.name.slice(dotIndex) : "";
+      const uploadFile = new File([file], `${keyword}${extension}`, {
+        type: file.type,
+        lastModified: file.lastModified,
+      });
+      const response = await bridge().upload("voices/upload", uploadFile);
       await readResponse(response);
       elements.uploadForm.reset();
       await loadVoices();
