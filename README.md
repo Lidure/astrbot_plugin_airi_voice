@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.10.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.10.1-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -88,7 +88,7 @@ https://vocalremover.org/zh/cutter
 
 > 💡 可在插件配置中开启 `fuzzy_keyword_match`（模糊匹配）。开启后，用户消息只要包含主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。Prefix 模式仍要求 `#voice` 前缀，LLM 模式不受该开关影响。默认关闭。
 
-> 🔊 **v2.10.0 发送兼容性**：聊天发送统一先准备为 WAV。原 WAV 直接发送；MP3/OGG/FLAC/M4A/AMR 优先复用 AstrBot MediaResolver，失败时使用插件依赖的 PyAV 自带编解码库转换，最后才尝试系统 ffmpeg；SILK 复用 silk-python 解码。转换结果缓存到插件数据目录 `send_cache`，源文件变化后自动生成新缓存。
+> 🔊 **v2.10.1 可选 WAV 兼容**：新增 `convert_audio_to_wav`（发送前转换为 WAV），默认关闭。关闭时按旧版方式直接发送原始音频；只有开启后才会使用 WAV 兼容层（AstrBot MediaResolver → PyAV → 系统 ffmpeg，SILK 使用 silk-python），并缓存到 `send_cache`。遇到 Windows/精简环境提示 `ffmpeg not found` 或部分音频发送失败时再开启即可。
 
 > ⚠️ 未选择 LLM 模式时，插件只作为普通语音关键词插件工作，大模型不会看到 `airi_*` 工具。
 
@@ -100,7 +100,7 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ---
 
-## 🖥️ WebUI 音频与关键词管理（v2.10.0）
+## 🖥️ WebUI 音频与关键词管理（v2.10.1）
 
 支持 **Plugin Pages / Web API** 的 AstrBot 会在插件详情页显示 `pages/airi-voice/index.html` 管理页面；页面现在分为 **音频管理** 与 **关键词管理** 两个导航页。音频管理保留搜索、试听、上传、删除和重载；关键词管理可为每条音频维护多个额外触发关键词。页面通过已认证的 Dashboard bridge 工作，不会启动独立服务器，也不需要数据库。
 

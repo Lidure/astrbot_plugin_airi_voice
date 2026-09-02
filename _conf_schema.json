@@ -18,6 +18,12 @@
     "hint": "开启后，用户消息只要包含任意主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。prefix 模式仍要求 #voice 前缀，LLM 模式不使用此匹配。默认关闭。",
     "default": false
   },
+  "convert_audio_to_wav": {
+    "description": "发送前转换为 WAV",
+    "type": "bool",
+    "hint": "默认关闭：沿用旧版行为，直接以原始音频格式交给 AstrBot。开启后，发送前统一转换为 WAV 并缓存，可用于缺少 ffmpeg 或部分音频格式发送失败的环境。",
+    "default": false
+  },
   "admin_mode": {
     "description": "管理命令权限模式",
     "type": "string",
