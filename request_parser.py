@@ -30,6 +30,22 @@ def claim_random_dispatch(event: object) -> bool:
     return True
 
 
+def match_trigger_keyword(text: str, voice_keys, fuzzy_match: bool = False) -> str | None:
+    """Resolve an exact or contained trigger keyword deterministically."""
+    value = (text or "").strip()
+    keys = [key for key in voice_keys if isinstance(key, str) and key]
+    if value in keys:
+        return value
+    if not fuzzy_match or not value:
+        return None
+
+    matches = [key for key in keys if key in value]
+    if not matches:
+        return None
+    matches.sort(key=lambda key: (-len(key), value.find(key), key))
+    return matches[0]
+
+
 def parse_request(text: str, enable_prefix: bool, trigger_mode: str, raw_text: str | None = None) -> ParsedRequest:
     text = (text or "").strip()
     raw = raw_text.strip() if isinstance(raw_text, str) else None

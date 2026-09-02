@@ -12,6 +12,12 @@
     "hint": "开启后随机筛选关键词必须使用 /随机...；固定关键词“随机语音”仍可直接触发，其他关键词不受影响。默认关闭",
     "default": false
   },
+  "fuzzy_keyword_match": {
+    "description": "模糊匹配",
+    "type": "bool",
+    "hint": "开启后，用户消息只要包含任意主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。prefix 模式仍要求 #voice 前缀，LLM 模式不使用此匹配。默认关闭。",
+    "default": false
+  },
   "admin_mode": {
     "description": "管理命令权限模式",
     "type": "string",
