@@ -169,6 +169,18 @@ async def _convert_standard_audio(source: Path, target: Path) -> None:
         ) from ffmpeg_error
 
 
+async def prepare_voice_path(
+    path: str | Path,
+    convert_audio_to_wav: bool,
+    compat: "AudioSendCompat",
+) -> str:
+    """Return the original voice path unless WAV compatibility is explicitly enabled."""
+
+    if not convert_audio_to_wav:
+        return str(path)
+    return await compat.prepare(path)
+
+
 class AudioSendCompat:
     """Prepare voice files as WAV and cache converted output per source revision."""
 

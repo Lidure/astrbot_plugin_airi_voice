@@ -20,12 +20,12 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 if __package__:
-    from .audio_compat import AudioSendCompat
+    from .audio_compat import AudioSendCompat, prepare_voice_path
     from .web_api import dashboard_request_is_admin, register_web_features
     from .request_parser import claim_random_dispatch, match_trigger_keyword, parse_request
     from .voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 else:
-    from audio_compat import AudioSendCompat
+    from audio_compat import AudioSendCompat, prepare_voice_path
     from web_api import dashboard_request_is_admin, register_web_features
     from request_parser import claim_random_dispatch, match_trigger_keyword, parse_request
     from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
@@ -614,7 +614,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
     "airi_voice",
     "lidure",
     "输入关键词发送对应语音",
-    "2.10.0",
+    "2.10.1",
     "https://github.com/Lidure/astrbot_plugin_airi_voice",
 )
 class AiriVoice(Star):
@@ -684,6 +684,7 @@ class AiriVoice(Star):
             self.llm_max_voices_per_request = 0
 
         self.fuzzy_keyword_match = bool(self.config.get("fuzzy_keyword_match", False))
+        self.convert_audio_to_wav = bool(self.config.get("convert_audio_to_wav", False))
         self.auto_reply_voice_enabled = self.config.get("auto_reply_voice_on_bot_message", False)
         self.list_as_image = self.config.get("list_as_image", False)   # ← 新增
 
@@ -819,8 +820,12 @@ class AiriVoice(Star):
         return tuple(item for item in pool if isinstance(item, str))
 
     async def _record_for_voice(self, path: str):
-        prepared_path = await self.audio_send_compat.prepare(path)
-        if prepared_path != str(Path(path).resolve()):
+        prepared_path = await prepare_voice_path(
+            path,
+            self.convert_audio_to_wav,
+            self.audio_send_compat,
+        )
+        if self.convert_audio_to_wav and prepared_path != str(path):
             logger.debug(f"[AiriVoice] 发送前已转换为 WAV：{path} -> {prepared_path}")
         return Record.fromFileSystem(prepared_path)
 
