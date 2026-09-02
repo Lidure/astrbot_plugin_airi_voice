@@ -258,8 +258,8 @@ def test_webui_has_audio_and_keyword_tabs_with_alias_management_controls():
     assert 'id="keyword-list"' in page
     assert 'data-view="audio"' in page and 'data-view="keywords"' in page
     assert 'bridge().apiGet("keywords")' in script
-    assert 'keywords/aliases/add?voice_id=' in script
-    assert 'keywords/aliases/remove?voice_id=' in script
+    assert 'bridge().apiPost("keywords/aliases/add", { voice_id: item.id, alias })' in script
+    assert 'bridge().apiPost("keywords/aliases/remove", { voice_id: item.id, alias })' in script
     assert "renderKeywords" in script
     assert ".management-tabs" in styles
     assert ".alias-chip" in styles
