@@ -719,7 +719,7 @@ class AiriVoice(Star):
         if self.auto_reply_voice_enabled:
             logger.info("[AiriVoice] 已启用 bot 回复自动追加语音功能")
 
-        logger.info(f"[AiriVoice] 初始化完成，共 {len(self.voice_map)} 个语音，权限模式：{self.admin_mode}，列表图片模式：{'开启' if self.list_as_image else '关闭'}")
+        logger.info(f"[AiriVoice] 初始化完成，共 {len(self.primary_voice_map)} 个语音，权限模式：{self.admin_mode}，列表图片模式：{'开启' if self.list_as_image else '关闭'}")
 
     # ==================== 原有辅助方法（未修改） ====================
 
@@ -1601,7 +1601,7 @@ class AiriVoice(Star):
             return
         self._load_web_voices(self.config)
         self.last_extra_voice_pool = self._configured_extra_voice_pool()
-        yield event.plain_result(f"✅ 已重新加载，共 {len(self.voice_map)} 个语音")
+        yield event.plain_result(f"✅ 已重新加载，共 {len(self.primary_voice_map)} 个语音")
 
     @filter.command("voice.check")
     async def check_permission(self, event: AstrMessageEvent):
