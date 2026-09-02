@@ -21,11 +21,11 @@ from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 if __package__:
     from .web_api import dashboard_request_is_admin, register_web_features
-    from .request_parser import claim_random_dispatch, parse_request
+    from .request_parser import claim_random_dispatch, match_trigger_keyword, parse_request
     from .voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 else:
     from web_api import dashboard_request_is_admin, register_web_features
-    from request_parser import claim_random_dispatch, parse_request
+    from request_parser import claim_random_dispatch, match_trigger_keyword, parse_request
     from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 
 try:
@@ -680,6 +680,7 @@ class AiriVoice(Star):
         if self.llm_max_voices_per_request < 0:
             self.llm_max_voices_per_request = 0
 
+        self.fuzzy_keyword_match = bool(self.config.get("fuzzy_keyword_match", False))
         self.auto_reply_voice_enabled = self.config.get("auto_reply_voice_on_bot_message", False)
         self.list_as_image = self.config.get("list_as_image", False)   # ← 新增
 
@@ -1420,7 +1421,9 @@ class AiriVoice(Star):
                     yield event.plain_result("语音发送失败")
             return
 
-        keyword = request.keyword
+        keyword = match_trigger_keyword(request.keyword or "", self.voice_map.keys(), self.fuzzy_keyword_match)
+        if not keyword:
+            return
 
         matched_path = self.voice_map.get(keyword)
         if matched_path:
