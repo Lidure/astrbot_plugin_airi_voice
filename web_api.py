@@ -6,43 +6,24 @@ older AstrBot versions can still load the chat plugin without WebUI support.
 
 from dataclasses import dataclass
 import inspect
-import io
 import logging
 import mimetypes
-import wave
 from pathlib import Path
 from typing import Any
 
 if __package__:
+    from .audio_compat import decode_silk_to_wav_bytes
     from .voice_catalog import CatalogError, VoiceEntry
 else:
+    from audio_compat import decode_silk_to_wav_bytes
     from voice_catalog import CatalogError, VoiceEntry
 
 
 LOGGER = logging.getLogger(__name__)
 PLUGIN_NAME = "astrbot_plugin_airi_voice"
-SILK_PREVIEW_RATE = 24000
-
 
 def _decode_silk_to_wav(path: Path) -> bytes:
-    """Decode Tencent/standard SILK into browser-playable mono WAV bytes."""
-
-    import pysilk
-
-    pcm_buffer = io.BytesIO()
-    with path.open("rb") as source:
-        pysilk.decode(source, pcm_buffer, SILK_PREVIEW_RATE)
-    pcm_data = pcm_buffer.getvalue()
-    if not pcm_data:
-        raise ValueError("SILK decoder returned empty PCM data")
-
-    wav_buffer = io.BytesIO()
-    with wave.open(wav_buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(SILK_PREVIEW_RATE)
-        wav_file.writeframes(pcm_data)
-    return wav_buffer.getvalue()
+    return decode_silk_to_wav_bytes(path)
 
 
 @dataclass(frozen=True)

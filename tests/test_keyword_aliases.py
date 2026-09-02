@@ -265,9 +265,9 @@ def test_webui_has_audio_and_keyword_tabs_with_alias_management_controls():
     assert ".alias-chip" in styles
 
 
-def test_feature_does_not_bump_release_version():
+def test_keyword_alias_feature_is_in_v210_release():
     metadata = Path("metadata.yaml").read_text(encoding="utf-8")
     main = Path("main.py").read_text(encoding="utf-8")
 
-    assert "version: v2.9.9" in metadata
-    assert '"2.9.9"' in main
+    assert "version: v2.10.0" in metadata
+    assert '"2.10.0"' in main

@@ -20,10 +20,12 @@ from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 if __package__:
+    from .audio_compat import AudioSendCompat
     from .web_api import dashboard_request_is_admin, register_web_features
     from .request_parser import claim_random_dispatch, match_trigger_keyword, parse_request
     from .voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
 else:
+    from audio_compat import AudioSendCompat
     from web_api import dashboard_request_is_admin, register_web_features
     from request_parser import claim_random_dispatch, match_trigger_keyword, parse_request
     from voice_catalog import ALLOWED_EXTENSIONS, CatalogError, VoiceCatalog
@@ -427,7 +429,7 @@ class AiriSendVoiceTool(FunctionTool[AstrAgentContext]):
             await _send_message_with_retry(
                 agent_ctx,
                 event.unified_msg_origin,
-                MessageChain([Record.fromFileSystem(path)]),
+                MessageChain([await self.plugin._record_for_voice(path)]),
             )
             logger.debug(f"[AiriVoice] LLM 工具发送语音：'{resolved_name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
@@ -497,7 +499,7 @@ class AiriSendRandomVoiceTool(FunctionTool[AstrAgentContext]):
             await _send_message_with_retry(
                 agent_ctx,
                 event.unified_msg_origin,
-                MessageChain([Record.fromFileSystem(path)]),
+                MessageChain([await self.plugin._record_for_voice(path)]),
             )
             logger.debug(f"[AiriVoice] LLM 工具随机发送语音：'{name}' → {path}")
             setattr(event, "__airi_voice_sent_by_tool__", True)
@@ -583,7 +585,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
                 await _send_message_with_retry(
                     agent_ctx,
                     event.unified_msg_origin,
-                    MessageChain([Record.fromFileSystem(path)]),
+                    MessageChain([await self.plugin._record_for_voice(path)]),
                 )
                 setattr(event, "__airi_voice_sent_by_tool__", True)
                 if limit > 0:
@@ -612,7 +614,7 @@ class AiriSendVoicesTool(FunctionTool[AstrAgentContext]):
     "airi_voice",
     "lidure",
     "输入关键词发送对应语音",
-    "2.9.9",
+    "2.10.0",
     "https://github.com/Lidure/astrbot_plugin_airi_voice",
 )
 class AiriVoice(Star):
@@ -626,6 +628,7 @@ class AiriVoice(Star):
         self.user_added_dir.mkdir(parents=True, exist_ok=True)
         self.extra_voice_dir = self.data_dir / "extra_voices"
         self.extra_voice_dir.mkdir(parents=True, exist_ok=True)
+        self.audio_send_compat = AudioSendCompat(self.data_dir / "send_cache")
 
         logger.info(f"[AiriVoice] 数据目录：{self.data_dir}")
 
@@ -814,6 +817,12 @@ class AiriVoice(Star):
         if not isinstance(pool, (list, tuple)):
             return ()
         return tuple(item for item in pool if isinstance(item, str))
+
+    async def _record_for_voice(self, path: str):
+        prepared_path = await self.audio_send_compat.prepare(path)
+        if prepared_path != str(Path(path).resolve()):
+            logger.debug(f"[AiriVoice] 发送前已转换为 WAV：{path} -> {prepared_path}")
+        return Record.fromFileSystem(prepared_path)
 
     def _sync_catalog_state(self):
         self.primary_voice_map = self.catalog.refresh()
@@ -1384,7 +1393,13 @@ class AiriVoice(Star):
             self._load_web_voices(self.config)
             self.last_extra_voice_pool = current_extra_voice_pool
 
-        request = parse_request(text, self.enable_prefix, self.trigger_mode, raw_text)
+        request = parse_request(
+            text,
+            self.enable_prefix,
+            self.trigger_mode,
+            raw_text,
+            known_keywords=self.voice_map.keys(),
+        )
         if request.kind in {"ignore", "admin_command"}:
             return
 
@@ -1397,7 +1412,7 @@ class AiriVoice(Star):
                 matched_path = self.primary_voice_map.get(name)
                 if matched_path:
                     try:
-                        yield event.chain_result([Record.fromFileSystem(matched_path)])
+                        yield event.chain_result([await self._record_for_voice(matched_path)])
                         logger.debug(f"[AiriVoice] 随机发送语音（全局）：'{name}'")
                     except Exception as e:
                         logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
@@ -1415,7 +1430,7 @@ class AiriVoice(Star):
             matched_path = self.voice_map.get(name)
             if matched_path:
                 try:
-                    yield event.chain_result([Record.fromFileSystem(matched_path)])
+                    yield event.chain_result([await self._record_for_voice(matched_path)])
                 except Exception as e:
                     logger.error(f"[AiriVoice] 随机发送失败 '{name}': {e}")
                     yield event.plain_result("语音发送失败")
@@ -1428,7 +1443,7 @@ class AiriVoice(Star):
         matched_path = self.voice_map.get(keyword)
         if matched_path:
             try:
-                yield event.chain_result([Record.fromFileSystem(matched_path)])
+                yield event.chain_result([await self._record_for_voice(matched_path)])
                 logger.debug(f"[AiriVoice] 发送语音：'{keyword}'")
             except FileNotFoundError as e:
                 logger.error(f"[AiriVoice] 文件不存在 '{keyword}': {e}")
@@ -1471,7 +1486,7 @@ class AiriVoice(Star):
             name = random.choice(list(self.primary_voice_map.keys()))
             matched_path = self.primary_voice_map.get(name)
             if matched_path:
-                yield event.chain_result([Record.fromFileSystem(matched_path)])
+                yield event.chain_result([await self._record_for_voice(matched_path)])
             return
 
         match = re.match(r"^随机\s*(.+)$", text)
@@ -1482,7 +1497,7 @@ class AiriVoice(Star):
             yield event.plain_result(f"未找到包含「{match.group(1).strip()}」的语音")
             return
         matched_path = self.primary_voice_map[random.choice(candidates)]
-        yield event.chain_result([Record.fromFileSystem(matched_path)])
+        yield event.chain_result([await self._record_for_voice(matched_path)])
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def random_prefix_listener(self, event: AstrMessageEvent):
@@ -1666,7 +1681,7 @@ class AiriVoice(Star):
                 path = self.voice_map.get(keyword)
                 if path:
                     try:
-                        result.chain.append(Record.fromFileSystem(path))
+                        result.chain.append(await self._record_for_voice(path))
                         logger.info(
                             f"[AiriVoice-auto] 已追加语音 → 关键词: '{keyword}'  文件: {path}"
                         )
