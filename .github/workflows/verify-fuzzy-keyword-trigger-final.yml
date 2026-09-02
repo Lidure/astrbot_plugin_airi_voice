@@ -1,0 +1,32 @@
+name: Final fuzzy keyword trigger verification
+
+on:
+  push:
+    branches:
+      - verify/fuzzy-keyword-trigger-final
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q
+      - run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py
+      - run: python -c "import json; d=json.load(open('_conf_schema.json', encoding='utf-8')); assert d['fuzzy_keyword_match']['type']=='bool' and d['fuzzy_keyword_match']['default'] is False"
+      - name: Verify fuzzy trigger source contract
+        run: |
+          grep -q 'def match_trigger_keyword' request_parser.py
+          grep -q 'self.fuzzy_keyword_match = bool(self.config.get("fuzzy_keyword_match", False))' main.py
+          grep -q 'match_trigger_keyword(request.keyword or "", self.voice_map.keys(), self.fuzzy_keyword_match)' main.py
+      - name: Verify version remains v2.9.9
+        run: |
+          grep -q 'version: v2.9.9' metadata.yaml
+          grep -q '"2.9.9"' main.py
+      - run: git diff --check origin/master...HEAD
