@@ -5,6 +5,9 @@ on:
     branches:
       - fix/webui-alias-post-upload-feedback
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +18,121 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Apply bridge and upload feedback fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_str, old, new):
+              path = Path(path_str)
+              text = path.read_text(encoding="utf-8")
+              if old in text:
+                  if text.count(old) != 1:
+                      raise SystemExit(f"unexpected replacement count in {path_str}: {text.count(old)}")
+                  text = text.replace(old, new, 1)
+                  path.write_text(text, encoding="utf-8")
+              elif new not in text:
+                  raise SystemExit(f"replacement target not found in {path_str}")
+
+          app = "pages/airi-voice/app.js"
+          replace_once(
+              app,
+              '    file: document.getElementById("file-input"),\n    audioCard: document.getElementById("audio-player-card"),',
+              '    file: document.getElementById("file-input"),\n    uploadFeedback: document.getElementById("upload-feedback"),\n    audioCard: document.getElementById("audio-player-card"),',
+          )
+          replace_once(
+              app,
+              '  function showError(error) {\n    state.error = error ? messageFrom(error, "操作未完成，请稍后重试。") : "";\n    elements.error.textContent = state.error;\n    elements.error.hidden = !state.error;\n  }\n\n  function displaySize(bytes) {',
+              '  function showError(error) {\n    state.error = error ? messageFrom(error, "操作未完成，请稍后重试。") : "";\n    elements.error.textContent = state.error;\n    elements.error.hidden = !state.error;\n  }\n\n  function showUploadFeedback(message, kind = "") {\n    elements.uploadFeedback.textContent = message || "";\n    elements.uploadFeedback.hidden = !message;\n    elements.uploadFeedback.classList.toggle("is-success", kind === "success");\n    elements.uploadFeedback.classList.toggle("is-error", kind === "error");\n  }\n\n  function displaySize(bytes) {',
+          )
+          replace_once(
+              app,
+              '    if (!keyword || !file) { showError(new Error("请填写关键词并选择音频文件。")); return; }\n    setLoading(true, "正在上传语音…");\n    showError(null);',
+              '    if (!keyword || !file) {\n      const error = new Error("请填写关键词并选择音频文件。");\n      showError(error);\n      showUploadFeedback(`❌ ${error.message}`, "error");\n      return;\n    }\n    setLoading(true, "正在上传语音…");\n    showError(null);\n    showUploadFeedback("");',
+          )
+          replace_once(
+              app,
+              '      elements.uploadForm.reset();\n      await loadVoices();\n      elements.status.textContent = "语音已上传并刷新列表。";',
+              '      elements.uploadForm.reset();\n      await loadVoices();\n      showUploadFeedback(`✅ 语音「${keyword}」上传成功，已刷新列表。`, "success");\n      elements.status.textContent = `语音「${keyword}」上传成功。`;',
+          )
+          replace_once(
+              app,
+              '    } catch (error) {\n      showError(error);\n      elements.status.textContent = "上传未完成。";',
+              '    } catch (error) {\n      showError(error);\n      showUploadFeedback(`❌ 上传失败：${messageFrom(error, "操作未完成，请稍后重试。")}`, "error");\n      elements.status.textContent = "上传未完成。";',
+          )
+          replace_once(
+              app,
+              '      const endpoint = `keywords/aliases/add?voice_id=${encodeURIComponent(item.id)}&alias=${encodeURIComponent(alias)}`;\n      const response = await bridge().apiPost(endpoint);',
+              '      const response = await bridge().apiPost("keywords/aliases/add", { voice_id: item.id, alias });',
+          )
+          replace_once(
+              app,
+              '      const endpoint = `keywords/aliases/remove?voice_id=${encodeURIComponent(item.id)}&alias=${encodeURIComponent(alias)}`;\n      const response = await bridge().apiPost(endpoint);',
+              '      const response = await bridge().apiPost("keywords/aliases/remove", { voice_id: item.id, alias });',
+          )
+
+          web_api = "web_api.py"
+          replace_once(
+              web_api,
+              '    def _forbidden(self) -> Any:\n        return self._error("forbidden", "administrator permission is required", 403)\n\n    @staticmethod\n    def _entry_json(entry: VoiceEntry) -> dict[str, Any]:',
+              '    def _forbidden(self) -> Any:\n        return self._error("forbidden", "administrator permission is required", 403)\n\n    async def _request_json_payload(self) -> dict[str, Any]:\n        request = self._web().request\n        loader = getattr(request, "json", None)\n        if not callable(loader):\n            return {}\n        try:\n            payload = loader(default={})\n        except TypeError:\n            payload = loader()\n        if inspect.isawaitable(payload):\n            payload = await payload\n        return payload if isinstance(payload, dict) else {}\n\n    @staticmethod\n    def _entry_json(entry: VoiceEntry) -> dict[str, Any]:',
+          )
+          path = Path(web_api)
+          text = path.read_text(encoding="utf-8")
+          old = '            query = self._web().request.query\n            voice_id = query.get("voice_id", "")\n            alias = query.get("alias", "")'
+          new = '            request = self._web().request\n            payload = await self._request_json_payload()\n            query = request.query\n            voice_id = payload.get("voice_id") or query.get("voice_id", "")\n            alias = payload.get("alias") or query.get("alias", "")'
+          if old in text:
+              if text.count(old) != 2:
+                  raise SystemExit(f"expected two alias request blocks, found {text.count(old)}")
+              text = text.replace(old, new)
+              path.write_text(text, encoding="utf-8")
+          elif text.count(new) != 2:
+              raise SystemExit("alias request body blocks not found")
+
+          index = "pages/airi-voice/index.html"
+          replace_once(
+              index,
+              '            <div class="upload-actions">\n              <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>\n              <button type="submit" class="button" data-mutation>上传语音</button>\n            </div>\n          </form>',
+              '            <div class="upload-actions">\n              <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>\n              <button type="submit" class="button" data-mutation>上传语音</button>\n            </div>\n            <p id="upload-feedback" class="upload-feedback" role="status" aria-live="polite" hidden></p>\n          </form>',
+          )
+
+          style = Path("pages/airi-voice/style.css")
+          css = style.read_text(encoding="utf-8")
+          marker = ".upload-feedback.is-success"
+          if marker not in css:
+              css += '''\n\n.upload-feedback {\n  margin: 14px 0 0;\n  padding: 12px 14px;\n  border: 1px solid transparent;\n  border-radius: 12px;\n  font-weight: 700;\n  line-height: 1.5;\n}\n\n.upload-feedback.is-success {\n  background: rgba(34, 197, 94, 0.12);\n  border-color: rgba(34, 197, 94, 0.35);\n  color: #15803d;\n}\n\n.upload-feedback.is-error {\n  background: rgba(239, 68, 68, 0.1);\n  border-color: rgba(239, 68, 68, 0.32);\n  color: #b91c1c;\n}\n'''
+              style.write_text(css, encoding="utf-8")
+
+          tests = Path("tests/test_keyword_aliases.py")
+          text = tests.read_text(encoding="utf-8")
+          old = '    assert \'keywords/aliases/add?voice_id=\' in script\n    assert \'keywords/aliases/remove?voice_id=\' in script'
+          new = '    assert \'bridge().apiPost("keywords/aliases/add", { voice_id: item.id, alias })\' in script\n    assert \'bridge().apiPost("keywords/aliases/remove", { voice_id: item.id, alias })\' in script'
+          if old in text:
+              text = text.replace(old, new, 1)
+              tests.write_text(text, encoding="utf-8")
+          elif new not in text:
+              raise SystemExit("keyword alias frontend assertions not found")
+          PY
+      - name: Commit implementation if needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Implementation already applied"
+          else
+            git config user.name "Lidure"
+            git config user.email "101858375+Lidure@users.noreply.github.com"
+            git add pages/airi-voice/app.js pages/airi-voice/index.html pages/airi-voice/style.css web_api.py tests/test_keyword_aliases.py
+            git commit -m "fix: repair alias bridge calls and upload feedback"
+            git push origin HEAD:fix/webui-alias-post-upload-feedback
+          fi
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
-      - run: pytest -q tests/test_webui_bridge_feedback_regression.py
+      - run: pytest -q
+      - run: python -m py_compile main.py web_api.py voice_catalog.py request_parser.py
+      - run: python -c "import json; json.load(open('_conf_schema.json', encoding='utf-8'))"
+      - name: Verify version remains v2.9.9
+        run: |
+          grep -q 'version: v2.9.9' metadata.yaml
+          grep -q '"2.9.9"' main.py
+      - run: git diff --check origin/master...HEAD
