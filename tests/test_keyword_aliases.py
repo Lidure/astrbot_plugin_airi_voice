@@ -107,6 +107,10 @@ def test_runtime_uses_alias_trigger_map_without_polluting_primary_lists_or_rando
     assert "names = sorted(self.plugin.primary_voice_map.keys())" in source
     assert "candidates = list(self.plugin.primary_voice_map.keys())" in source
     assert "random.choice(list(self.primary_voice_map.keys()))" in source
+    assert "name = random.choice(list(self.primary_voice_map.keys()))" in source
+    assert "candidates = [name for name in self.primary_voice_map if match.group(1).strip() in name]" in source
+    assert "random.choice(list(self.voice_map.keys()))" not in source
+    assert "candidates = [name for name in self.voice_map if match.group(1).strip() in name]" not in source
 
 
 class FakeQuery(dict):
