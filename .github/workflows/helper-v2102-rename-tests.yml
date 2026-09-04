@@ -1,0 +1,49 @@
+name: Helper rename v2.10.2 release tests
+
+on:
+  push:
+    branches:
+      - helper/v2102-rename-release-tests
+
+permissions:
+  contents: write
+
+jobs:
+  rename:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rename release tests on feature branch
+        shell: bash
+        run: |
+          git checkout -B fix/upload-limit-50mb-v2.10.2 origin/fix/upload-limit-50mb-v2.10.2
+          python - <<'PY'
+          from pathlib import Path
+          replacements = {
+              'tests/test_audio_trigger_compat_v210.py': (
+                  'test_audio_compat_feature_is_in_v2_10_1_release',
+                  'test_audio_compat_feature_is_in_v2_10_2_release',
+              ),
+              'tests/test_optional_wav_conversion_v2101.py': (
+                  'test_release_version_is_v2_10_1',
+                  'test_release_version_is_v2_10_2',
+              ),
+              'tests/test_keyword_aliases.py': (
+                  'test_keyword_alias_feature_is_in_v2101_release',
+                  'test_keyword_alias_feature_is_in_v2102_release',
+              ),
+          }
+          for filename, (old, new) in replacements.items():
+              path = Path(filename)
+              text = path.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'missing expected test name: {old}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git config user.name "Lidure"
+          git config user.email "101858375+Lidure@users.noreply.github.com"
+          git add tests/test_audio_trigger_compat_v210.py tests/test_optional_wav_conversion_v2101.py tests/test_keyword_aliases.py
+          git commit -m "test: align release test names with v2.10.2"
+          git push origin HEAD:fix/upload-limit-50mb-v2.10.2
