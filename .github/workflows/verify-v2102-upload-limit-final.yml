@@ -1,0 +1,35 @@
+name: Final v2.10.2 upload-limit verification
+
+on:
+  push:
+    branches:
+      - verify/upload-limit-50mb-v2102-final
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pytest
+      - name: Full regression suite
+        run: pytest -q
+      - name: Compile and validate release
+        shell: bash
+        run: |
+          python -m py_compile main.py web_api.py voice_catalog.py request_parser.py audio_compat.py
+          python - <<'PY'
+          from voice_catalog import MAX_UPLOAD_BYTES
+          assert MAX_UPLOAD_BYTES == 50 * 1024 * 1024
+          print(f'max_upload_bytes={MAX_UPLOAD_BYTES}')
+          PY
+          grep -q 'upload exceeds 50 MB' voice_catalog.py
+          grep -q 'version: v2.10.2' metadata.yaml
+          grep -q '"2.10.2"' main.py
+          test ! -e .github/workflows/temp-v2102-upload-limit-red.yml
+          git diff --check origin/master...c47417642ff36dc69d45c6c0ad719450a87c961f
