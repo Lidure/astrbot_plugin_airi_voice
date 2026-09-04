@@ -1,19 +1,93 @@
-name: Temporary v2.10.2 upload limit RED
+name: Temporary v2.10.2 upload limit GREEN
 
 on:
   push:
     branches:
       - fix/upload-limit-50mb-v2.10.2
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Apply v2.10.2 implementation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          catalog = Path('voice_catalog.py')
+          text = catalog.read_text(encoding='utf-8')
+          text = text.replace('MAX_UPLOAD_BYTES = 20 * 1024 * 1024', 'MAX_UPLOAD_BYTES = 50 * 1024 * 1024', 1)
+          text = text.replace('upload exceeds 20 MB', 'upload exceeds 50 MB', 1)
+          catalog.write_text(text, encoding='utf-8')
+
+          metadata = Path('metadata.yaml')
+          text = metadata.read_text(encoding='utf-8').replace('version: v2.10.1', 'version: v2.10.2', 1)
+          metadata.write_text(text, encoding='utf-8')
+
+          main = Path('main.py')
+          text = main.read_text(encoding='utf-8').replace('    "2.10.1",\n', '    "2.10.2",\n', 1)
+          main.write_text(text, encoding='utf-8')
+
+          for name in (
+              'tests/test_audio_trigger_compat_v210.py',
+              'tests/test_optional_wav_conversion_v2101.py',
+              'tests/test_keyword_aliases.py',
+          ):
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('version: v2.10.1', 'version: v2.10.2')
+              text = text.replace("'\"2.10.1\"'", "'\"2.10.2\"'")
+              path.write_text(text, encoding='utf-8')
+
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8')
+          text = text.replace('Version-2.10.1-orange', 'Version-2.10.2-orange', 1)
+          note = '> 📦 **v2.10.2 上传上限**：`/voice.add` 与 WebUI 单个语音文件上限统一由 20 MB 提高到 50 MB；保存格式与发送方式不变。\n\n'
+          anchor = '> 🔊 **v2.10.1 可选 WAV 兼容**'
+          if note not in text and anchor in text:
+              text = text.replace(anchor, note + anchor, 1)
+          readme.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          entry = '## [2.10.2] - 2026-09-04\n\n### 变更\n\n- 将 `/voice.add` 与 WebUI 的单个语音文件上传上限统一从 20 MB 提高到 50 MB。\n- 保持原始音频格式保存与既有发送行为不变。\n\n'
+          marker = '## [Unreleased]\n\n'
+          if entry not in text:
+              text = text.replace(marker, marker + entry, 1)
+          changelog.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit implementation
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Implementation already applied"
+          else
+            git config user.name "Lidure"
+            git config user.email "101858375+Lidure@users.noreply.github.com"
+            git add voice_catalog.py metadata.yaml main.py README.md CHANGELOG.md tests/test_audio_trigger_compat_v210.py tests/test_optional_wav_conversion_v2101.py tests/test_keyword_aliases.py
+            git commit -m "fix: raise voice upload limit to 50 MB"
+            git push origin HEAD:fix/upload-limit-50mb-v2.10.2
+          fi
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt pytest
-      - name: RED contract
-        run: pytest -q tests/test_upload_limit_v2102.py
+      - name: Full regression suite
+        run: pytest -q
+      - name: Compile and verify contracts
+        shell: bash
+        run: |
+          python -m py_compile main.py web_api.py voice_catalog.py request_parser.py audio_compat.py
+          grep -q 'MAX_UPLOAD_BYTES = 50 \* 1024 \* 1024' voice_catalog.py
+          grep -q 'upload exceeds 50 MB' voice_catalog.py
+          grep -q 'version: v2.10.2' metadata.yaml
+          grep -q '"2.10.2"' main.py
+          git diff --check origin/master...HEAD
