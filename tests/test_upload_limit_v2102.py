@@ -21,6 +21,16 @@ def test_upload_limit_is_50_mb_for_shared_catalog_paths():
     assert MAX_UPLOAD_BYTES == EXPECTED_LIMIT
 
 
+def test_voice_add_accepts_exactly_50_mb(tmp_path):
+    catalog = make_catalog(tmp_path)
+    data = b"x" * EXPECTED_LIMIT
+
+    entry = catalog.save_user_upload("exact.ogg", "ExactVoiceAdd", data)
+
+    assert entry.size == EXPECTED_LIMIT
+    assert entry.path.stat().st_size == EXPECTED_LIMIT
+
+
 def test_web_upload_rejects_just_over_50_mb(tmp_path):
     catalog = make_catalog(tmp_path)
     with pytest.raises(CatalogError) as error:
