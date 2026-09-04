@@ -269,5 +269,5 @@ def test_keyword_alias_feature_is_in_v2101_release():
     metadata = Path("metadata.yaml").read_text(encoding="utf-8")
     main = Path("main.py").read_text(encoding="utf-8")
 
-    assert "version: v2.10.1" in metadata
-    assert '"2.10.1"' in main
+    assert "version: v2.10.2" in metadata
+    assert '"2.10.2"' in main

@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 
 ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".silk", ".amr", ".flac", ".m4a"}
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 SOURCES = ("builtin", "user_added", "extra_voices")
 ALIAS_STORE_FILENAME = "keyword_aliases.json"
 
@@ -222,7 +222,7 @@ class VoiceCatalog:
         if not isinstance(data, bytes):
             raise CatalogError("invalid_upload", "upload data must be bytes")
         if len(data) > MAX_UPLOAD_BYTES:
-            raise CatalogError("too_large", "upload exceeds 20 MB")
+            raise CatalogError("too_large", "upload exceeds 50 MB")
         if "/" in filename or "\\" in filename:
             raise CatalogError("invalid_filename", "filename is invalid")
         extension = Path(filename).suffix.lower()

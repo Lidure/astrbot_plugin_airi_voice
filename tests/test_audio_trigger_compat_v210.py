@@ -112,5 +112,5 @@ def test_all_chat_voice_sends_use_plugin_compatibility_layer():
 def test_audio_compat_feature_is_in_v2_10_1_release():
     metadata = (ROOT / "metadata.yaml").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
-    assert "version: v2.10.1" in metadata
-    assert '"2.10.1"' in main
+    assert "version: v2.10.2" in metadata
+    assert '"2.10.2"' in main

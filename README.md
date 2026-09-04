@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.10.1-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.10.2-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -87,6 +87,8 @@ https://vocalremover.org/zh/cutter
 | **LLM 模式** | 仅在需要由大模型自动选择并发送语音时启用，会为当前会话注册 `airi_*` LLM 工具 | 与 Agent 对话、需要“智能选语音”的场景 |
 
 > 💡 可在插件配置中开启 `fuzzy_keyword_match`（模糊匹配）。开启后，用户消息只要包含主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。Prefix 模式仍要求 `#voice` 前缀，LLM 模式不受该开关影响。默认关闭。
+
+> 📦 **v2.10.2 上传上限**：`/voice.add` 与 WebUI 单个语音文件上限统一由 20 MB 提高到 50 MB；保存格式与发送方式不变。
 
 > 🔊 **v2.10.1 可选 WAV 兼容**：新增 `convert_audio_to_wav`（发送前转换为 WAV），默认关闭。关闭时按旧版方式直接发送原始音频；只有开启后才会使用 WAV 兼容层（AstrBot MediaResolver → PyAV → 系统 ffmpeg，SILK 使用 silk-python），并缓存到 `send_cache`。遇到 Windows/精简环境提示 `ffmpeg not found` 或部分音频发送失败时再开启即可。
 
