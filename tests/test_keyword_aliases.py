@@ -265,7 +265,7 @@ def test_webui_has_audio_and_keyword_tabs_with_alias_management_controls():
     assert ".alias-chip" in styles
 
 
-def test_keyword_alias_feature_is_in_v2101_release():
+def test_keyword_alias_feature_is_in_v2102_release():
     metadata = Path("metadata.yaml").read_text(encoding="utf-8")
     main = Path("main.py").read_text(encoding="utf-8")
 

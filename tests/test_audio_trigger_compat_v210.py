@@ -109,7 +109,7 @@ def test_all_chat_voice_sends_use_plugin_compatibility_layer():
     assert "await self.plugin._record_for_voice(" in main
 
 
-def test_audio_compat_feature_is_in_v2_10_1_release():
+def test_audio_compat_feature_is_in_v2_10_2_release():
     metadata = (ROOT / "metadata.yaml").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     assert "version: v2.10.2" in metadata

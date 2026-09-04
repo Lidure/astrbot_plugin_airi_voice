@@ -57,7 +57,7 @@ def test_main_wires_config_into_voice_record_preparation():
     assert "self.convert_audio_to_wav" in main
 
 
-def test_release_version_is_v2_10_1():
+def test_release_version_is_v2_10_2():
     metadata = (ROOT / "metadata.yaml").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     assert "version: v2.10.2" in metadata
