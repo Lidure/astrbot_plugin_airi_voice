@@ -1550,7 +1550,7 @@ class AiriVoice(Star):
             yield event.plain_result("❌ 未能从引用的消息中提取到音频路径，请确保引用的是语音消息")
             return
 
-        logger.debug(f"[AiriVoice] 获取到本地音频路径: {local_path}")
+        logger.info(f"[AiriVoice] 获取到本地音频路径: {local_path}")
 
         # 2. 读取本地文件 (由修改后的 _download_audio 处理)
         res = await self._download_audio(local_path)
