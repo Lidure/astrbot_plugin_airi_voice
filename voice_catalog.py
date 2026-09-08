@@ -58,12 +58,9 @@ class VoiceCatalog:
     def _resolve_case_sensitivity(value: bool | None) -> bool:
         if value is not None:
             return bool(value)
-        # AiriVoice historically constructed VoiceCatalog without passing the
-        # config object. Read the caller's plugin config for backward-compatible
-        # propagation of the new setting without changing the public constructor
-        # contract used by older integrations.
         try:
-            caller_self = inspect.currentframe().f_back.f_locals.get("self")
+            frame = inspect.currentframe()
+            caller_self = frame.f_back.f_back.f_locals.get("self") if frame and frame.f_back and frame.f_back.f_back else None
             config = getattr(caller_self, "config", None)
             if isinstance(config, dict):
                 return bool(config.get("case_insensitive_keyword_match", False))
@@ -117,10 +114,7 @@ class VoiceCatalog:
             key = self._keyword_key(entry.name)
             existing = effective_keywords.get(key)
             if existing is not None:
-                raise CatalogError(
-                    "duplicate_keyword",
-                    self._duplicate_keyword_message(entry.name, existing.name),
-                )
+                raise CatalogError("duplicate_keyword", self._duplicate_keyword_message(entry.name, existing.name))
             effective_keywords[key] = entry
 
         entries_with_aliases: dict[str, VoiceEntry] = {}
@@ -132,10 +126,7 @@ class VoiceCatalog:
                 key = self._keyword_key(alias)
                 existing = effective_keywords.get(key)
                 if existing is not None:
-                    raise CatalogError(
-                        "duplicate_keyword",
-                        self._duplicate_keyword_message(alias, existing.name),
-                    )
+                    raise CatalogError("duplicate_keyword", self._duplicate_keyword_message(alias, existing.name))
                 effective_keywords[key] = entry
                 aliases.append(alias)
             if aliases:
@@ -175,16 +166,10 @@ class VoiceCatalog:
         folded = self._keyword_key(value)
         for existing in self._entries.values():
             if self._keyword_key(existing.name) == folded:
-                raise CatalogError(
-                    "duplicate_keyword",
-                    self._duplicate_keyword_message(value, existing.name),
-                )
+                raise CatalogError("duplicate_keyword", self._duplicate_keyword_message(value, existing.name))
             for existing_alias in existing.aliases:
                 if self._keyword_key(existing_alias) == folded:
-                    raise CatalogError(
-                        "duplicate_keyword",
-                        self._duplicate_keyword_message(value, existing_alias),
-                    )
+                    raise CatalogError("duplicate_keyword", self._duplicate_keyword_message(value, existing_alias))
 
         aliases = list(self._aliases.get(entry.id, []))
         aliases.append(value)
@@ -197,10 +182,7 @@ class VoiceCatalog:
         entry = self.resolve_entry(entry_id)
         value = self.validate_keyword(alias)
         aliases = list(self._aliases.get(entry.id, []))
-        match_index = next(
-            (index for index, existing in enumerate(aliases) if self._keyword_key(existing) == self._keyword_key(value)),
-            None,
-        )
+        match_index = next((index for index, existing in enumerate(aliases) if self._keyword_key(existing) == self._keyword_key(value)), None)
         if match_index is None:
             raise CatalogError("not_found", "没有找到要删除的额外关键词。")
         aliases.pop(match_index)
@@ -216,11 +198,7 @@ class VoiceCatalog:
         if source is not None and source not in SOURCES:
             raise CatalogError("invalid_source", "source is invalid")
         query_folded = (query or "").casefold()
-        return [
-            entry
-            for entry in self._sorted_entries(source=source)
-            if query_folded in entry.name.casefold()
-        ]
+        return [entry for entry in self._sorted_entries(source=source) if query_folded in entry.name.casefold()]
 
     def save_upload(self, filename: str, keyword: str, data: bytes) -> VoiceEntry:
         return self._save_file("extra_voices", filename, keyword, data)
@@ -297,16 +275,9 @@ class VoiceCatalog:
 
     def _write_alias_store(self) -> None:
         self.data_root.mkdir(parents=True, exist_ok=True)
-        payload = {
-            entry_id: list(aliases)
-            for entry_id, aliases in sorted(self._aliases.items())
-            if aliases
-        }
+        payload = {entry_id: list(aliases) for entry_id, aliases in sorted(self._aliases.items()) if aliases}
         temporary = self.alias_store_path.with_suffix(self.alias_store_path.suffix + ".tmp")
-        temporary.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         temporary.replace(self.alias_store_path)
 
     def _entry_for_configured_path(self, configured_path: str) -> VoiceEntry | None:
@@ -349,10 +320,7 @@ class VoiceCatalog:
         )
 
     def _sorted_entries(self, source: str | None = None) -> list[VoiceEntry]:
-        return sorted(
-            (entry for entry in self._entries.values() if source is None or entry.source == source),
-            key=lambda entry: (entry.name.casefold(), entry.name, entry.source, entry.id),
-        )
+        return sorted((entry for entry in self._entries.values() if source is None or entry.source == source), key=lambda entry: (entry.name.casefold(), entry.name, entry.source, entry.id))
 
     @staticmethod
     def _entry_id(source: str, relative: Path) -> str:
