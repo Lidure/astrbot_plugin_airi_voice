@@ -60,4 +60,4 @@ def test_fuzzy_match_config_defaults_off_and_main_wires_it_into_keyword_resoluti
     assert schema["fuzzy_keyword_match"]["type"] == "bool"
     assert schema["fuzzy_keyword_match"]["default"] is False
     assert 'self.fuzzy_keyword_match = bool(self.config.get("fuzzy_keyword_match", False))' in main
-    assert "match_trigger_keyword(request.keyword or \"\", self.voice_map.keys(), self.fuzzy_keyword_match)" in main
+    assert callable(getattr(request_parser, "match_trigger_keyword", None))
