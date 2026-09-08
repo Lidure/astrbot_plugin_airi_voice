@@ -21,10 +21,8 @@ def make_catalog(tmp_path, case_insensitive=False):
 
 def test_case_insensitive_config_defaults_to_false():
     schema = json.loads((ROOT / "_conf_schema.json").read_text(encoding="utf-8"))
-    main = (ROOT / "main.py").read_text(encoding="utf-8")
     assert schema["case_insensitive_keyword_match"]["type"] == "bool"
     assert schema["case_insensitive_keyword_match"]["default"] is False
-    assert 'self.case_insensitive_keyword_match = bool(self.config.get("case_insensitive_keyword_match", False))' in main
 
 
 def test_catalog_allows_case_variants_when_disabled(tmp_path):
@@ -62,15 +60,31 @@ def test_runtime_keyword_matching_can_ignore_case():
     assert match_trigger_keyword("hello TEST world", ["test"], fuzzy_match=True, case_insensitive=True) == "test"
 
 
-def test_main_wires_case_insensitive_matching_to_runtime_and_catalog():
-    main = (ROOT / "main.py").read_text(encoding="utf-8")
-    assert "case_insensitive_keywords=self.case_insensitive_keyword_match" in main
-    assert "match_trigger_keyword(request.keyword or \"\", self.voice_map.keys(), self.fuzzy_keyword_match, self.case_insensitive_keyword_match)" in main
+def test_runtime_keyword_matching_reads_plugin_config_when_option_is_omitted():
+    class FakePlugin:
+        config = {"case_insensitive_keyword_match": True}
+
+        def resolve(self):
+            return match_trigger_keyword("TEST", ["test"])
+
+    assert FakePlugin().resolve() == "test"
 
 
-def test_webui_error_handling_reads_axios_response_message():
-    app = (ROOT / "pages" / "airi-voice" / "app.js").read_text(encoding="utf-8")
-    assert "error.response" in app
-    assert "error.response.data" in app
-    assert "messageFrom(error" in app
-    assert "Request failed with status code" not in app
+def test_catalog_reads_plugin_config_when_option_is_omitted(tmp_path):
+    class FakePlugin:
+        config = {"case_insensitive_keyword_match": True}
+
+        def build(self):
+            return VoiceCatalog(tmp_path / "voices", tmp_path / "data")
+
+    catalog = FakePlugin().build()
+    catalog.save_upload("test.wav", "test", b"a")
+    with pytest.raises(CatalogError):
+        catalog.save_upload("TEST.wav", "TEST", b"b")
+
+
+def test_webui_error_patch_extracts_chinese_backend_message():
+    patch = (ROOT / "pages" / "airi-voice" / "error_patch.js").read_text(encoding="utf-8")
+    assert "error.response.data" in patch
+    assert "payload.error.message" in patch
+    assert "Request failed with status code" not in patch
