@@ -38,7 +38,7 @@ def test_catalog_rejects_case_variants_when_enabled(tmp_path):
     with pytest.raises(CatalogError) as error:
         catalog.save_upload("TEST.wav", "TEST", b"b")
     assert error.value.code == "duplicate_keyword"
-    assert "忽略大小写" in error.value.message
+    assert "忽略关键词大小写" in error.value.message
     assert "TEST" in error.value.message
     assert "test" in error.value.message
 
@@ -50,7 +50,7 @@ def test_alias_conflict_message_explains_case_insensitive_mode(tmp_path):
     with pytest.raises(CatalogError) as error:
         catalog.add_alias(entry.id, "TEST")
     assert error.value.code == "duplicate_keyword"
-    assert "忽略大小写" in error.value.message
+    assert "忽略关键词大小写" in error.value.message
     assert "TEST" in error.value.message
 
 
@@ -83,8 +83,10 @@ def test_catalog_reads_plugin_config_when_option_is_omitted(tmp_path):
         catalog.save_upload("TEST.wav", "TEST", b"b")
 
 
-def test_webui_error_patch_extracts_chinese_backend_message():
+def test_webui_error_patch_handles_real_bridge_rejection_shapes():
     patch = (ROOT / "pages" / "airi-voice" / "error_patch.js").read_text(encoding="utf-8")
     assert "error.response.data" in patch
-    assert "payload.error.message" in patch
-    assert "Request failed with status code" not in patch
+    assert "JSON.parse" in patch
+    assert "Promise.resolve().then" in patch
+    assert "extractMessage(error) || readableFallback(error)" in patch
+    assert "后端未返回可读的错误详情" in patch
