@@ -88,3 +88,10 @@ def test_webui_error_patch_extracts_chinese_backend_message():
     assert "error.response.data" in patch
     assert "payload.error.message" in patch
     assert "Request failed with status code" not in patch
+
+
+def test_webui_message_parser_reads_rejected_bridge_response_directly():
+    app = (ROOT / "pages" / "airi-voice" / "app.js").read_text(encoding="utf-8")
+    assert "error.response.data" in app
+    assert "JSON.parse" in app
+    assert "后端未返回可读的错误详情" in app
