@@ -1,12 +1,6 @@
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
-class ParsedRequest:
-    kind: str
-    keyword: str | None = None
-
-
 _RANDOM_DISPATCH_ATTR = "__airi_random_voice_dispatched__"
 _RANDOM_ALL_PHRASES = {"随机语音", "随机发条语音"}
 
@@ -31,19 +25,34 @@ def claim_random_dispatch(event: object) -> bool:
     return True
 
 
-def match_trigger_keyword(text: str, voice_keys, fuzzy_match: bool = False) -> str | None:
+def match_trigger_keyword(
+    text: str,
+    voice_keys,
+    fuzzy_match: bool = False,
+    case_insensitive: bool = False,
+) -> str | None:
     """Resolve an exact or contained trigger keyword deterministically."""
     value = (text or "").strip()
     keys = [key for key in voice_keys if isinstance(key, str) and key]
-    if value in keys:
+    if case_insensitive:
+        value_key = value.casefold()
+        exact = next((key for key in keys if key.casefold() == value_key), None)
+        if exact is not None:
+            return exact
+    elif value in keys:
         return value
+
     if not fuzzy_match or not value:
         return None
 
-    matches = [key for key in keys if key in value]
+    if case_insensitive:
+        value_key = value.casefold()
+        matches = [key for key in keys if key.casefold() in value_key]
+    else:
+        matches = [key for key in keys if key in value]
     if not matches:
         return None
-    matches.sort(key=lambda key: (-len(key), value.find(key), key))
+    matches.sort(key=lambda key: (-len(key), value.casefold().find(key.casefold()) if case_insensitive else value.find(key), key))
     return matches[0]
 
 
