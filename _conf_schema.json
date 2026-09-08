@@ -18,6 +18,12 @@
     "hint": "开启后，用户消息只要包含任意主关键词或额外关键词即可触发；整句精确匹配优先，否则选择命中的最长关键词。prefix 模式仍要求 #voice 前缀，LLM 模式不使用此匹配。默认关闭。",
     "default": false
   },
+  "case_insensitive_keyword_match": {
+    "description": "关键词忽略大小写",
+    "type": "bool",
+    "hint": "开启后，关键词匹配和关键词冲突检查均不区分英文字母大小写。例如 test、Test、TEST 会被视为同一个关键词。默认关闭。",
+    "default": false
+  },
   "convert_audio_to_wav": {
     "description": "发送前转换为 WAV",
     "type": "bool",
