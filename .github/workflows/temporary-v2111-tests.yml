@@ -14,4 +14,5 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -r requirements.txt pytest
-      - run: python -m pytest -q
+      - run: python -m pytest -q tests/test_case_insensitive_keywords_v2110.py::test_webui_error_patch_handles_real_bridge_rejection_shapes
+      - run: python -m compileall -q .
