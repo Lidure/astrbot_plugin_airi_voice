@@ -106,7 +106,7 @@ class VoiceManagementRoutes:
             return payload, status_code
 
     def _error(self, code: str, message: str, status_code: int) -> Any:
-        return self._json({"error": {"code": code, "message": message}}, status_code)
+        return self._json({"error": code, "message": message}, status_code)
 
     def _catalog_error(self, error: CatalogError) -> Any:
         status_code = 404 if error.code == "not_found" else 400
