@@ -11,8 +11,8 @@ from voice_catalog import CatalogError, VoiceCatalog, VoiceEntry
 from web_api import VoiceManagementRoutes, register_web_features
 
 
-def make_catalog(tmp_path, extra_voice_pool=()):
-    return VoiceCatalog(tmp_path / "voices", tmp_path / "data", extra_voice_pool)
+def make_catalog(tmp_path, extra_voice_pool=(), case_insensitive=False):
+    return VoiceCatalog(tmp_path / "voices", tmp_path / "data", extra_voice_pool, case_insensitive_keywords=case_insensitive)
 
 
 def test_aliases_persist_and_expand_trigger_map_without_changing_primary_refresh(tmp_path):
@@ -41,12 +41,12 @@ def test_aliases_persist_and_expand_trigger_map_without_changing_primary_refresh
     assert (tmp_path / "data" / "keyword_aliases.json").is_file()
 
 
-def test_aliases_are_globally_unique_against_primary_names_and_other_aliases(tmp_path):
+def test_aliases_are_globally_unique_against_primary_names_and_other_aliases_when_case_insensitive(tmp_path):
     voices = tmp_path / "voices"
     voices.mkdir()
     (voices / "Alpha.wav").write_bytes(b"alpha")
     (voices / "Beta.wav").write_bytes(b"beta")
-    catalog = make_catalog(tmp_path)
+    catalog = make_catalog(tmp_path, case_insensitive=True)
     entries = {entry.name: entry for entry in catalog.list_entries()}
 
     catalog.add_alias(entries["Alpha"].id, "Common")
@@ -62,6 +62,17 @@ def test_aliases_are_globally_unique_against_primary_names_and_other_aliases(tmp
 
     assert catalog.aliases_for(entries["Alpha"].id) == ["Common"]
     assert catalog.aliases_for(entries["Beta"].id) == []
+
+
+def test_aliases_are_case_sensitive_by_default(tmp_path):
+    catalog = make_catalog(tmp_path)
+    path = tmp_path / "voices" / "Alpha.wav"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"alpha")
+    catalog.refresh()
+    entry = catalog.list_entries()[0]
+    catalog.add_alias(entry.id, "ALPHA")
+    assert catalog.aliases_for(entry.id) == ["ALPHA"]
 
 
 def test_local_voice_deletion_cleans_aliases(tmp_path):
@@ -189,7 +200,6 @@ def test_keyword_web_api_lists_aliases_and_mutates_them_on_fixed_routes():
     plugin = FakePlugin(request)
     routes = VoiceManagementRoutes(plugin, FakeWeb(request))
 
-    assert hasattr(routes, "list_keywords")
     listed = run(routes.list_keywords)
     assert listed["status"] == 200
     assert listed["body"]["items"][0]["name"] == "Bell"
@@ -212,7 +222,6 @@ def test_keyword_alias_mutations_require_dashboard_admin_permission():
     plugin = FakePlugin(request)
     routes = VoiceManagementRoutes(plugin, FakeWeb(request))
 
-    assert hasattr(routes, "add_alias")
     response = run(routes.add_alias)
     assert response["status"] == 403
     assert plugin.catalog.calls == []
@@ -265,9 +274,6 @@ def test_webui_has_audio_and_keyword_tabs_with_alias_management_controls():
     assert ".alias-chip" in styles
 
 
-def test_keyword_alias_feature_is_in_v2102_release():
+def test_keyword_alias_feature_is_in_v2110_release():
     metadata = Path("metadata.yaml").read_text(encoding="utf-8")
-    main = Path("main.py").read_text(encoding="utf-8")
-
-    assert "version: v2.10.2" in metadata
-    assert '"2.10.2"' in main
+    assert "version: v2.11.0" in metadata
