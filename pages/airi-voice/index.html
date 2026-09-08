@@ -74,7 +74,7 @@
               </label>
             </div>
             <div class="upload-actions">
-              <span class="upload-note">支持常见音频格式，单个文件最大 20 MB</span>
+              <span class="upload-note">支持常见音频格式，单个文件最大 50 MB</span>
               <button type="submit" class="button" data-mutation>上传语音</button>
             </div>
             <p id="upload-feedback" class="upload-feedback" role="status" aria-live="polite" hidden></p>
@@ -125,7 +125,7 @@
           <div class="panel-heading">
             <div>
               <h2 id="keyword-heading">关键词管理</h2>
-              <p>主关键词来自音频文件名；可为每条音频添加多个额外触发关键词。所有关键词全局唯一且忽略大小写。</p>
+              <p>主关键词来自音频文件名；可为每条音频添加多个额外触发关键词。关键词是否区分大小写由插件配置决定，默认区分大小写。</p>
             </div>
           </div>
 
@@ -164,6 +164,7 @@
       </form>
     </dialog>
 
+    <script src="error_patch.js" defer></script>
     <script src="app.js" defer></script>
   </body>
 </html>
