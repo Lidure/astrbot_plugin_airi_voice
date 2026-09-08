@@ -29,7 +29,8 @@ def _resolve_case_insensitive(value: bool | None) -> bool:
     if value is not None:
         return bool(value)
     try:
-        caller_self = inspect.currentframe().f_back.f_locals.get("self")
+        frame = inspect.currentframe()
+        caller_self = frame.f_back.f_back.f_locals.get("self") if frame and frame.f_back and frame.f_back.f_back else None
         config = getattr(caller_self, "config", None)
         if isinstance(config, dict):
             return bool(config.get("case_insensitive_keyword_match", False))
@@ -113,11 +114,7 @@ def parse_request(
         keyword = random_text[2:].strip()
         return ParsedRequest("random_filter", keyword) if keyword else ParsedRequest("random_all")
 
-    known = {
-        item
-        for item in (known_keywords or ())
-        if isinstance(item, str) and item
-    }
+    known = {item for item in (known_keywords or ()) if isinstance(item, str) and item}
     if text in known:
         return ParsedRequest("keyword", text)
 
