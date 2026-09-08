@@ -1,6 +1,12 @@
 from dataclasses import dataclass
 
 
+@dataclass(frozen=True)
+class ParsedRequest:
+    kind: str
+    keyword: str | None = None
+
+
 _RANDOM_DISPATCH_ATTR = "__airi_random_voice_dispatched__"
 _RANDOM_ALL_PHRASES = {"随机语音", "随机发条语音"}
 
@@ -20,7 +26,6 @@ def claim_random_dispatch(event: object) -> bool:
             return False
         setattr(event, _RANDOM_DISPATCH_ATTR, True)
     except Exception:
-        # Preserve legacy behavior for unusual immutable event proxies.
         return True
     return True
 
@@ -52,7 +57,13 @@ def match_trigger_keyword(
         matches = [key for key in keys if key in value]
     if not matches:
         return None
-    matches.sort(key=lambda key: (-len(key), value.casefold().find(key.casefold()) if case_insensitive else value.find(key), key))
+    matches.sort(
+        key=lambda key: (
+            -len(key),
+            value.casefold().find(key.casefold()) if case_insensitive else value.find(key),
+            key,
+        )
+    )
     return matches[0]
 
 
@@ -83,19 +94,15 @@ def parse_request(
     random_text = raw[1:].strip() if raw is not None and raw.startswith("/随机") else text
     has_single_prefix = raw is not None and raw.startswith("/随机")
 
-    # Keep the two public random-all phrases reserved for backward compatibility.
     if random_text in _RANDOM_ALL_PHRASES:
         if enable_prefix and random_text != "随机语音" and not has_single_prefix:
             return ParsedRequest("ignore")
         return ParsedRequest("random_all")
 
-    # An explicit /随机... command always keeps command semantics.
     if has_single_prefix and random_text.startswith("随机"):
         keyword = random_text[2:].strip()
         return ParsedRequest("random_filter", keyword) if keyword else ParsedRequest("random_all")
 
-    # In direct mode, an existing exact voice keyword must not be swallowed only
-    # because its filename happens to start with the Chinese word “随机”.
     known = {
         item
         for item in (known_keywords or ())
