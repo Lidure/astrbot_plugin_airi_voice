@@ -83,15 +83,10 @@ def test_catalog_reads_plugin_config_when_option_is_omitted(tmp_path):
         catalog.save_upload("TEST.wav", "TEST", b"b")
 
 
-def test_webui_error_patch_extracts_chinese_backend_message():
+def test_webui_error_patch_handles_real_bridge_rejection_shapes():
     patch = (ROOT / "pages" / "airi-voice" / "error_patch.js").read_text(encoding="utf-8")
     assert "error.response.data" in patch
-    assert "payload.error.message" in patch
+    assert "JSON.parse" in patch
+    assert "Promise.resolve().then" in patch
+    assert "后端未返回可读的错误详情" in patch
     assert "Request failed with status code" not in patch
-
-
-def test_webui_message_parser_reads_rejected_bridge_response_directly():
-    app = (ROOT / "pages" / "airi-voice" / "app.js").read_text(encoding="utf-8")
-    assert "error.response.data" in app
-    assert "JSON.parse" in app
-    assert "后端未返回可读的错误详情" in app
