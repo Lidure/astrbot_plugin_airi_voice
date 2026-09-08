@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import inspect
 
 
 @dataclass(frozen=True)
@@ -12,13 +13,7 @@ _RANDOM_ALL_PHRASES = {"随机语音", "随机发条语音"}
 
 
 def claim_random_dispatch(event: object) -> bool:
-    """Claim random-voice handling once for one AstrBot event.
-
-    Multiple AstrBot filters can match the same /随机... message. The check and
-    assignment are intentionally synchronous so only the first matching handler
-    owns the send before any handler reaches an await/yield boundary.
-    """
-
+    """Claim random-voice handling once for one AstrBot event."""
     if event is None:
         return False
     try:
@@ -30,15 +25,30 @@ def claim_random_dispatch(event: object) -> bool:
     return True
 
 
+def _resolve_case_insensitive(value: bool | None) -> bool:
+    if value is not None:
+        return bool(value)
+    try:
+        caller_self = inspect.currentframe().f_back.f_locals.get("self")
+        config = getattr(caller_self, "config", None)
+        if isinstance(config, dict):
+            return bool(config.get("case_insensitive_keyword_match", False))
+    except Exception:
+        pass
+    return False
+
+
 def match_trigger_keyword(
     text: str,
     voice_keys,
     fuzzy_match: bool = False,
-    case_insensitive: bool = False,
+    case_insensitive: bool | None = None,
 ) -> str | None:
     """Resolve an exact or contained trigger keyword deterministically."""
     value = (text or "").strip()
     keys = [key for key in voice_keys if isinstance(key, str) and key]
+    case_insensitive = _resolve_case_insensitive(case_insensitive)
+
     if case_insensitive:
         value_key = value.casefold()
         exact = next((key for key in keys if key.casefold() == value_key), None)
