@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.10.2-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.12.0-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -103,6 +103,8 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 ---
 
 ## 🖥️ Airi音频🌸：音频与关键词管理 Page
+
+**当前版本：v2.12.0**。本次更新包含 Hallmark 页面重设计、音频库搜索与排序、播放器交互优化以及 Page 名称统一。
 
 **Page 显示名称为「Airi音频🌸」**（浏览器标题和页面主标题均已同步）；插件在 AstrBot 插件管理中仍显示为「Airi自定义音频发送🌸」，两者是不同的名称。Page 对应文件为 `pages/airi-voice/index.html`，**不需要改动该路径**。
 
