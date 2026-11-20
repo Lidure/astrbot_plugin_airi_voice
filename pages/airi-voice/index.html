@@ -1,159 +1,180 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Airi Voice 管理</title>
-    <link rel="stylesheet" href="style.css">
-  </head>
-  <body>
-    <main class="page-shell">
-      <header class="page-header">
-        <div>
-          <p class="eyebrow">Airi Voice</p>
-          <h1>语音管理</h1>
-          <p class="intro">管理音频文件与触发关键词。主关键词和额外关键词都可以触发同一条语音。</p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Airi Voice 语音素材管理，支持音频试听、下载、上传及触发关键词管理。">
+  <title>语音素材库 | Airi Voice</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-frame">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand" aria-label="Airi Voice">
+          <span class="brand-symbol" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span>Airi Voice</span>
         </div>
-        <button id="refresh-button" type="button" class="button button-secondary" data-mutation>重载语音</button>
-      </header>
+        <div class="topbar-divider" aria-hidden="true"></div>
+        <span class="topbar-context">语音管理工作台</span>
+        <button id="refresh-button" type="button" class="button button-secondary refresh-button" data-mutation>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.8 9A7 7 0 0 1 18 7l2 5M4 12l2 5a7 7 0 0 0 12.2-2"/></svg>
+          <span>重载语音</span>
+        </button>
+      </div>
+    </header>
 
-      <nav class="management-tabs" aria-label="管理导航">
-        <button id="audio-tab" type="button" class="management-tab is-active" data-view="audio" aria-controls="audio-management-view" aria-selected="true">音频管理</button>
-        <button id="keywords-tab" type="button" class="management-tab" data-view="keywords" aria-controls="keyword-management-view" aria-selected="false">关键词管理</button>
-      </nav>
+    <main class="page-shell">
+      <div class="page-heading">
+        <div class="page-heading-copy">
+          <h1>语音素材库</h1>
+          <p class="intro">试听、整理和维护 Airi 的每一条语音。</p>
+        </div>
+        <nav class="management-tabs" role="tablist" aria-label="管理导航">
+          <button id="audio-tab" type="button" role="tab" tabindex="0" class="management-tab is-active" data-view="audio" aria-controls="audio-management-view" aria-selected="true">音频管理</button>
+          <button id="keywords-tab" type="button" role="tab" tabindex="-1" class="management-tab" data-view="keywords" aria-controls="keyword-management-view" aria-selected="false">关键词管理</button>
+        </nav>
+      </div>
 
-      <p id="status-message" class="status-message" role="status" aria-live="polite">正在准备列表…</p>
-      <p id="error-message" class="error-message" role="alert" hidden></p>
+      <div class="feedback-area">
+        <p id="status-message" class="status-message" role="status" aria-live="polite">正在读取语音目录…</p>
+        <p id="error-message" class="error-message" role="alert" hidden></p>
+      </div>
 
-      <section id="audio-management-view" class="management-view" aria-labelledby="audio-tab">
-        <section class="summary-grid" aria-label="当前状态">
-          <article class="summary-card">
-            <span class="summary-label">当前条目</span>
-            <strong id="voice-total">0</strong>
-            <span>会随搜索条件变化</span>
-          </article>
-          <article class="summary-card">
-            <span class="summary-label">管理权限提示</span>
-            <strong>上传、删除、关键词与重载</strong>
-            <span><code>admin_mode=admin</code> 时，请先配置 <code>webui_admin_users</code>。</span>
-          </article>
-        </section>
-
-        <section id="audio-player-card" class="audio-player-card is-mini" hidden aria-labelledby="audio-player-title">
-          <div class="audio-player-heading">
-            <div>
-              <p class="eyebrow">正在试听</p>
-              <h2 id="audio-player-title">尚未选择语音</h2>
-              <p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>
+      <section id="audio-management-view" class="management-view" role="tabpanel" aria-labelledby="audio-tab">
+        <div class="workspace-grid">
+          <section class="library-panel" aria-labelledby="browse-heading">
+            <div class="panel-heading library-heading">
+              <div>
+                <h2 id="browse-heading">浏览语音</h2>
+                <p>选择音频进行试听、下载或删除。</p>
+              </div>
+              <div class="library-count"><strong id="voice-total" class="figure">0</strong><span>条结果</span></div>
             </div>
-            <div class="audio-player-actions">
-              <button id="audio-player-mini-play" type="button" class="button button-secondary" aria-label="播放或暂停">播放</button>
-              <button id="audio-player-toggle" type="button" class="button button-secondary" aria-expanded="false">展开</button>
-            </div>
-          </div>
-          <audio id="audio-player" controls preload="metadata"></audio>
-        </section>
 
-        <section class="panel" aria-labelledby="upload-heading">
-          <div class="panel-heading">
-            <div>
-              <h2 id="upload-heading">上传新语音</h2>
-              <p>填写主触发关键词并选择一个音频文件；服务器会验证格式、大小和关键词冲突。</p>
-            </div>
-          </div>
-          <form id="upload-form">
-            <div class="upload-fields upload-grid">
-              <label>
-                主触发关键词
-                <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
+            <div class="filters audio-filters">
+              <div class="search-group">
+                <label for="search-input">搜索语音</label>
+                <div class="input-with-action">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg>
+                  <input id="search-input" type="search" placeholder="输入语音名称" autocomplete="off" aria-keyshortcuts="Control+K Meta+K">
+                  <button id="clear-search" type="button" class="input-clear" aria-label="清除语音搜索" title="清除搜索" hidden>清除</button>
+                </div>
+              </div>
+              <label class="filter-field" for="source-filter">来源
+                <select id="source-filter">
+                  <option value="">全部来源</option>
+                  <option value="builtin">插件内置</option>
+                  <option value="user_added">已上传</option>
+                  <option value="extra_voices">额外目录</option>
+                </select>
               </label>
-              <label class="upload-file-field">
-                音频文件
+              <label class="filter-field" for="sort-filter">排序
+                <select id="sort-filter">
+                  <option value="name">名称（升序）</option>
+                  <option value="name-desc">名称（降序）</option>
+                  <option value="size-desc">文件从大到小</option>
+                  <option value="size">文件从小到大</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="empty-state" class="empty-state" hidden>
+              <div class="empty-symbol" aria-hidden="true"><span></span><span></span><span></span></div>
+              <h3>这里还没有匹配的语音</h3>
+              <p>试着清除筛选，或者在右侧上传新的音频。</p>
+            </div>
+            <div class="table-wrap">
+              <table id="voice-table">
+                <caption class="sr-only">可用语音列表</caption>
+                <thead><tr><th scope="col">音频名称</th><th scope="col">来源</th><th scope="col">格式</th><th scope="col">大小</th><th scope="col">操作</th></tr></thead>
+                <tbody id="voice-list"></tbody>
+              </table>
+            </div>
+            <div class="library-footnote">按 <kbd>Ctrl</kbd> + <kbd>K</kbd> 可快速搜索；在 Mac 上使用 <kbd>⌘</kbd> + <kbd>K</kbd>。</div>
+          </section>
+
+          <aside class="upload-panel" aria-labelledby="upload-heading">
+            <div class="upload-heading">
+              <h2 id="upload-heading">添加语音</h2>
+              <p>文件会保存在 AstrBot 的插件数据目录。</p>
+            </div>
+            <form id="upload-form">
+              <label for="keyword-input">主触发关键词 <span class="field-required">必填</span></label>
+              <input id="keyword-input" name="keyword" required maxlength="120" placeholder="例如：早上好">
+              <p class="field-hint">默认与语音名称一致，也可自行修改。</p>
+
+              <label for="file-input" class="file-label">选择音频文件 <span class="field-required">必填</span></label>
+              <div class="file-picker">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                <strong>点击选择音频</strong>
+                <small>MP3、WAV、OGG、SILK、AMR、FLAC、M4A</small>
                 <input id="file-input" name="file" type="file" required accept=".wav,.mp3,.ogg,.silk,.amr,.flac,.m4a,audio/*">
-                <small>Supported formats: .wav, .mp3, .ogg, .silk, .amr, .flac, .m4a</small>
-              </label>
-            </div>
-            <div class="upload-actions">
-              <span class="upload-note">支持常见音频格式，单个文件最大 50 MB</span>
-              <button type="submit" class="button" data-mutation>上传语音</button>
-            </div>
-            <p id="upload-feedback" class="upload-feedback" role="status" aria-live="polite" hidden></p>
-          </form>
-        </section>
-
-        <section class="panel" aria-labelledby="browse-heading">
-          <div class="panel-heading">
-            <div>
-              <h2 id="browse-heading">浏览语音</h2>
-              <p>按主关键词搜索或按来源筛选；每条音频均可试听、下载到本地。</p>
-            </div>
-          </div>
-          <div class="filters">
-            <label>
-              搜索名称
-              <input id="search-input" type="search" placeholder="例如：生日快乐" autocomplete="off">
-            </label>
-            <label>
-              来源
-              <select id="source-filter">
-                <option value="">全部来源</option>
-                <option value="builtin">插件内置</option>
-                <option value="user_added">已上传</option>
-                <option value="extra_voices">额外目录</option>
-              </select>
-            </label>
-          </div>
-
-          <div id="empty-state" class="empty-state" hidden>
-            <h3>没有找到语音</h3>
-            <p>请调整搜索条件，或上传一个新的音频文件。</p>
-          </div>
-          <div class="table-wrap">
-            <table id="voice-table">
-              <caption class="sr-only">可用语音列表</caption>
-              <thead>
-                <tr><th scope="col">名称</th><th scope="col">来源</th><th scope="col">格式</th><th scope="col">大小</th><th scope="col">操作</th></tr>
-              </thead>
-              <tbody id="voice-list"></tbody>
-            </table>
-          </div>
-        </section>
+              </div>
+              <p id="file-feedback" class="file-feedback" role="status" aria-live="polite">尚未选择文件</p>
+              <div class="upload-actions">
+                <span class="upload-note">单文件上限 50 MB</span>
+                <button type="submit" class="button button-primary" data-mutation>上传语音</button>
+              </div>
+              <p id="upload-feedback" class="upload-feedback" role="status" aria-live="polite" hidden></p>
+            </form>
+            <p class="permission-hint">如果无法上传或删除，请检查管理员权限配置。</p>
+          </aside>
+        </div>
       </section>
 
-      <section id="keyword-management-view" class="management-view" aria-labelledby="keywords-tab" hidden>
-        <section class="panel keyword-panel" aria-labelledby="keyword-heading">
-          <div class="panel-heading">
+      <section id="keyword-management-view" class="management-view" role="tabpanel" aria-labelledby="keywords-tab" hidden>
+        <section class="keyword-panel" aria-labelledby="keyword-heading">
+          <div class="panel-heading keyword-heading">
             <div>
               <h2 id="keyword-heading">关键词管理</h2>
-              <p>主关键词来自音频文件名；可为每条音频添加多个额外触发关键词。关键词是否区分大小写由插件配置决定，默认区分大小写。</p>
+              <p>为一条语音设置多个触发方式，不必重复上传文件。</p>
+            </div>
+            <div class="keyword-help">主关键词由音频名称决定</div>
+          </div>
+          <div class="filters keyword-filters">
+            <div class="search-group">
+              <label for="keyword-search-input">搜索关键词</label>
+              <div class="input-with-action">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg>
+                <input id="keyword-search-input" type="search" placeholder="主关键词或额外关键词" autocomplete="off">
+                <button id="clear-keyword-search" type="button" class="input-clear" aria-label="清除关键词搜索" hidden>清除</button>
+              </div>
             </div>
           </div>
-
-          <div class="filters keyword-filters">
-            <label>
-              搜索关键词
-              <input id="keyword-search-input" type="search" placeholder="搜索主关键词或额外关键词" autocomplete="off">
-            </label>
-          </div>
-
           <div id="keyword-empty-state" class="empty-state" hidden>
             <h3>没有找到匹配的关键词</h3>
-            <p>请调整搜索条件，或先在音频管理中添加语音。</p>
+            <p>清除搜索，或先在音频管理中添加一条语音。</p>
           </div>
           <div class="table-wrap keyword-table-wrap">
             <table id="keyword-table">
-              <caption class="sr-only">语音关键词与额外触发关键词列表</caption>
-              <thead>
-                <tr><th scope="col">主关键词</th><th scope="col">来源</th><th scope="col">额外触发关键词</th><th scope="col">添加关键词</th></tr>
-              </thead>
+              <caption class="sr-only">主关键词和额外触发关键词</caption>
+              <thead><tr><th scope="col">主关键词</th><th scope="col">来源</th><th scope="col">额外触发关键词</th><th scope="col">添加关键词</th></tr></thead>
               <tbody id="keyword-list"></tbody>
             </table>
           </div>
+          <p class="library-footnote">关键词匹配的大小写规则由插件配置决定。</p>
         </section>
       </section>
     </main>
 
-    <dialog id="delete-dialog" aria-labelledby="delete-title">
+    <section id="audio-player-card" class="audio-player-card is-mini" hidden aria-labelledby="audio-player-title">
+      <div class="player-main">
+        <div class="player-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="player-meta">
+          <h2 id="audio-player-title">尚未选择语音</h2>
+          <p id="audio-player-source" class="audio-player-source">选择列表中的语音开始播放</p>
+        </div>
+        <div class="audio-player-actions">
+          <button id="audio-player-mini-play" type="button" class="button button-secondary" aria-label="播放或暂停">播放</button>
+          <button id="audio-player-toggle" type="button" class="button button-secondary" aria-expanded="false">展开</button>
+          <button id="audio-player-stop" type="button" class="button button-icon" aria-label="关闭播放器" title="关闭播放器">×</button>
+        </div>
+      </div>
+      <audio id="audio-player" controls preload="metadata"></audio>
+    </section>
+
+    <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
       <form method="dialog" class="dialog-content">
         <h2 id="delete-title">删除语音？</h2>
         <p id="delete-description">此操作无法撤销。</p>
@@ -163,8 +184,8 @@
         </div>
       </form>
     </dialog>
-
-    <script src="error_patch.js" defer></script>
-    <script src="app.js" defer></script>
-  </body>
+  </div>
+  <script src="error_patch.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
 </html>

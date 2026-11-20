@@ -7,6 +7,7 @@
     query: "",
     keywordQuery: "",
     source: "",
+    sort: "name",
     activeView: "audio",
     loading: false,
     error: "",
@@ -25,6 +26,11 @@
     empty: document.getElementById("empty-state"),
     search: document.getElementById("search-input"),
     source: document.getElementById("source-filter"),
+    sort: document.getElementById("sort-filter"),
+    clearSearch: document.getElementById("clear-search"),
+    clearKeywordSearch: document.getElementById("clear-keyword-search"),
+    fileFeedback: document.getElementById("file-feedback"),
+    audioStop: document.getElementById("audio-player-stop"),
     refresh: document.getElementById("refresh-button"),
     audioTab: document.getElementById("audio-tab"),
     keywordsTab: document.getElementById("keywords-tab"),
@@ -172,6 +178,7 @@
     elements.audioTitle.textContent = item.name || "未命名语音";
     elements.audioSource.textContent = sourceLabel(item.source);
     elements.audioCard.hidden = false;
+    setPlayerMini(false);
   }
 
   function setPlayerMini(mini) {
@@ -206,9 +213,22 @@
     elements.keywordsTab.classList.toggle("is-active", keywords);
     elements.audioTab.setAttribute("aria-selected", String(!keywords));
     elements.keywordsTab.setAttribute("aria-selected", String(keywords));
+    elements.audioTab.tabIndex = keywords ? -1 : 0;
+    elements.keywordsTab.tabIndex = keywords ? 0 : -1;
+    try { window.history.replaceState(null, "", `#${keywords ? "keywords" : "audio"}`); } catch (_) { /* Embedded iframe may restrict history. */ }
     showError(null);
     if (keywords) loadKeywords();
     else loadVoices();
+  }
+
+  function applyVoiceSort(items) {
+    const sorted = [...items];
+    const nameCompare = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-CN", { numeric: true, sensitivity: "base" });
+    if (state.sort === "name-desc") sorted.sort((a, b) => nameCompare(b, a));
+    else if (state.sort === "size-desc") sorted.sort((a, b) => (Number(b.size) || 0) - (Number(a.size) || 0) || nameCompare(a, b));
+    else if (state.sort === "size") sorted.sort((a, b) => (Number(a.size) || 0) - (Number(b.size) || 0) || nameCompare(a, b));
+    else sorted.sort(nameCompare);
+    return sorted;
   }
 
   function renderVoices() {
@@ -216,14 +236,28 @@
     elements.total.textContent = String(state.items.length);
     elements.empty.hidden = state.items.length !== 0;
     elements.table.hidden = state.items.length === 0;
-    for (const item of state.items) {
+    for (const item of applyVoiceSort(state.items)) {
       const row = document.createElement("tr");
       const name = document.createElement("td");
-      name.textContent = item.name || "未命名语音";
+      const nameWrap = document.createElement("div");
+      nameWrap.className = "voice-name";
+      const icon = document.createElement("span");
+      icon.className = "voice-file-icon";
+      icon.textContent = "♫";
+      icon.setAttribute("aria-hidden", "true");
+      const nameText = document.createElement("span");
+      nameText.className = "voice-name-label";
+      nameText.textContent = item.name || "未命名语音";
+      nameWrap.append(icon, nameText);
+      name.append(nameWrap);
       const source = document.createElement("td");
       source.textContent = sourceLabel(item.source);
+      source.className = "source-label";
       const extension = document.createElement("td");
-      extension.textContent = item.extension || "—";
+      const extChip = document.createElement("span");
+      extChip.className = "extension-chip";
+      extChip.textContent = (item.extension || "—").replace(/^\./, "").toUpperCase();
+      extension.append(extChip);
       const size = document.createElement("td");
       size.textContent = displaySize(item.size);
       const actions = document.createElement("td");
@@ -232,7 +266,7 @@
       actions.append(
         makeButton("试听", "button button-small button-secondary", () => playVoice(item), !item.available),
         makeButton("下载", "button button-small button-secondary", () => downloadVoice(item), !item.available),
-        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly),
+        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly || !item.available),
       );
       row.append(name, source, extension, size, actions);
       elements.list.append(row);
@@ -275,6 +309,7 @@
 
       const source = document.createElement("td");
       source.textContent = sourceLabel(item.source);
+      source.className = "source-label";
 
       const aliases = document.createElement("td");
       aliases.className = "alias-list";
@@ -387,6 +422,7 @@
       const response = await bridge().upload("voices/upload", uploadFile);
       await readResponse(response);
       elements.uploadForm.reset();
+      updateFileFeedback();
       await loadVoices();
       showUploadFeedback(`✅ 语音「${keyword}」上传成功，已刷新列表。`, "success");
       elements.status.textContent = `语音「${keyword}」上传成功。`;
@@ -532,7 +568,41 @@
     }
   }
 
-  elements.search.addEventListener("input", () => { state.query = elements.search.value.trim(); loadVoices(); });
+  let searchTimer = null;
+  function scheduleVoiceSearch() {
+    state.query = elements.search.value.trim();
+    elements.clearSearch.hidden = !state.query;
+    if (searchTimer) window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(loadVoices, 260);
+  }
+  function updateFileFeedback() {
+    const file = elements.file.files && elements.file.files[0];
+    elements.fileFeedback.textContent = file ? file.name + "（" + displaySize(file.size) + "）" : "尚未选择文件";
+    if (file && !elements.keyword.value.trim()) elements.keyword.value = file.name.replace(/\.[^.]+$/, "");
+  }
+  function focusActiveSearch() {
+    const active = state.activeView === "keywords" ? elements.keywordSearch : elements.search;
+    active.focus();
+    active.select();
+  }
+  elements.search.addEventListener("input", scheduleVoiceSearch);
+  elements.clearSearch.addEventListener("click", () => { elements.search.value = ""; scheduleVoiceSearch(); elements.search.focus(); });
+  elements.keywordSearch.addEventListener("input", () => { elements.clearKeywordSearch.hidden = !elements.keywordSearch.value.trim(); });
+  elements.clearKeywordSearch.addEventListener("click", () => { elements.keywordSearch.value = ""; state.keywordQuery = ""; elements.clearKeywordSearch.hidden = true; renderKeywords(); elements.keywordSearch.focus(); });
+  elements.sort.addEventListener("change", () => { state.sort = elements.sort.value; renderVoices(); });
+  elements.file.addEventListener("change", updateFileFeedback);
+  window.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); focusActiveSearch(); }
+    if (event.key === "Escape" && !elements.audioCard.hidden && !elements.deleteDialog.open) { ++previewRequestVersion; stopCurrentAudio({ hide: true }); }
+  });
+  [elements.audioTab, elements.keywordsTab].forEach((tab, index, tabs) => {
+    tab.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].click(); tabs[next].focus();
+    });
+  });
   elements.keywordSearch.addEventListener("input", () => {
     state.keywordQuery = elements.keywordSearch.value.trim();
     renderKeywords();
@@ -545,6 +615,7 @@
   elements.confirmDelete.addEventListener("click", (event) => { event.preventDefault(); deleteVoice(); });
   elements.deleteDialog.addEventListener("close", () => { pendingDeleteId = null; });
   elements.audio.addEventListener("error", () => stopCurrentAudio({ hide: true }));
+  elements.audioStop.addEventListener("click", () => { ++previewRequestVersion; stopCurrentAudio({ hide: true }); });
   elements.audioToggle.addEventListener("click", () => {
     setPlayerMini(!elements.audioCard.classList.contains("is-mini"));
   });
@@ -567,9 +638,11 @@
     deleteVoice,
     reloadVoices,
     playVoice, downloadVoice, stopCurrentAudio,
+    applyVoiceSort, updateFileFeedback, focusActiveSearch,
     addAlias,
     removeAlias,
     setActiveView,
   };
-  loadVoices();
+  if (window.location.hash === "#keywords") setActiveView("keywords");
+  else loadVoices();
 })();
