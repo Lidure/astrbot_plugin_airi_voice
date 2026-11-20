@@ -206,6 +206,25 @@ class VoiceCatalog:
     def save_user_upload(self, filename: str, keyword: str, data: bytes) -> VoiceEntry:
         return self._save_file("user_added", filename, keyword, data)
 
+    def delete_configured_file(self, entry_id: str) -> bool:
+        """Permanently delete a configured audio file, confined to this plugin's data directory.
+
+        The caller must persist removal of its extra_voice_pool reference first.
+        Return False when the original file is already missing.
+        """
+        entry = self.resolve_entry(entry_id)
+        if not entry.id.startswith("extra_voices:configured/"):
+            raise CatalogError("invalid_entry", "这条语音不是配置文件池中的音频。")
+        path = entry.path.resolve()
+        try:
+            path.relative_to(self.data_root)
+        except ValueError as exc:
+            raise CatalogError("invalid_path", "禁止删除插件数据目录之外的文件。") from exc
+        if not path.is_file():
+            return False
+        path.unlink()
+        return True
+
     def delete(self, entry_id: str) -> None:
         entry = self.resolve_entry(entry_id)
         if entry.id.startswith("extra_voices:configured/"):

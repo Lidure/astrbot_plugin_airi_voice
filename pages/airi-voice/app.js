@@ -262,11 +262,11 @@
       size.textContent = displaySize(item.size);
       const actions = document.createElement("td");
       actions.className = "row-actions";
-      const configuredReadOnly = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");
+      const configuredPoolEntry = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");
       actions.append(
         makeButton("试听", "button button-small button-secondary", () => playVoice(item), !item.available),
         makeButton("下载", "button button-small button-secondary", () => downloadVoice(item), !item.available),
-        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly || !item.available),
+        makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), !configuredPoolEntry && !item.available),
       );
       row.append(name, source, extension, size, actions);
       elements.list.append(row);
@@ -473,7 +473,11 @@
 
   function openDeleteDialog(item) {
     pendingDeleteId = item.id;
-    elements.deleteDescription.textContent = `确定要删除“${item.name || "此语音"}”吗？此操作无法撤销。`;
+    const configuredPoolEntry = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");
+    elements.deleteDescription.textContent = configuredPoolEntry
+      ? `将永久删除“${item.name || "此语音"}”在服务器上的原始音频文件，同时移除“额外语音文件池”中的配置引用。删除不可撤销，请先备份需要保留的音频。确定继续吗？`
+      : `将永久删除“${item.name || "此语音"}”在服务器上的原始音频文件。此操作不可撤销，请先备份。确定继续吗？`;
+    elements.confirmDelete.textContent = "永久删除";
     if (typeof elements.deleteDialog.showModal === "function") elements.deleteDialog.showModal();
   }
 
@@ -484,11 +488,13 @@
     showError(null);
     try {
       const response = await bridge().apiPost(`voices/${encodeURIComponent(voiceId)}/delete`);
-      await readResponse(response);
+      const outcome = await readResponse(response);
       pendingDeleteId = null;
       elements.deleteDialog.close();
       await loadVoices();
-      elements.status.textContent = "语音已删除并刷新列表。";
+      elements.status.textContent = outcome && outcome.file_deleted === false
+        ? "已清除失效的文件池引用；原始音频此前已不存在。"
+        : "原始音频已永久删除，语音目录已更新。";
     } catch (error) {
       showError(error);
       elements.status.textContent = "删除未完成。";

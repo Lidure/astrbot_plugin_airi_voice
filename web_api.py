@@ -262,13 +262,85 @@ class VoiceManagementRoutes:
             LOGGER.exception("[AiriVoice] keyword alias remove WebUI request failed")
             return self._error("internal_error", "unable to remove keyword alias", 500)
 
+    async def _delete_configured_voice(self, entry: VoiceEntry) -> bool:
+        """Delete the original configured audio and persist removal of every matching pool ref."""
+        config = getattr(self.plugin, "config", None)
+        save = getattr(config, "save_config", None)
+        if not callable(save):
+            raise CatalogError(
+                "config_not_writable",
+                "无法保存文件池配置：请确认 AstrBot 已向插件提供可保存的配置对象。",
+            )
+        pool = config.get("extra_voice_pool", [])
+        if not isinstance(pool, (tuple, list)):
+            raise CatalogError("invalid_config", "额外语音文件池配置格式不正确。")
+
+        remaining = []
+        removed_count = 0
+        for configured_path in pool:
+            configured_entry = self.plugin.catalog._entry_for_configured_path(configured_path)
+            if configured_entry is not None and configured_entry.id == entry.id:
+                removed_count += 1
+            else:
+                remaining.append(configured_path)
+        if not removed_count:
+            raise CatalogError("not_found", "文件池配置中没有找到此音频，请刷新页面后重试。")
+
+        async def persist_config() -> None:
+            result = save()
+            if inspect.isawaitable(result):
+                result = await result
+            if result is False:
+                raise RuntimeError("AstrBot rejected the config save")
+
+        # Save configuration first. If saving fails the original file remains untouched.
+        config["extra_voice_pool"] = remaining
+        try:
+            await persist_config()
+        except Exception as exc:
+            config["extra_voice_pool"] = pool
+            try:
+                await persist_config()
+            except Exception:
+                LOGGER.exception("[AiriVoice] failed to restore voice pool after save error")
+            raise CatalogError("config_save_failed", "文件池配置保存失败，原始音频未删除。") from exc
+
+        try:
+            return self.plugin.catalog.delete_configured_file(entry.id)
+        except Exception as exc:
+            # A failed unlink must not silently remove the entry from the persisted pool.
+            config["extra_voice_pool"] = pool
+            try:
+                await persist_config()
+            except Exception:
+                LOGGER.exception("[AiriVoice] failed to restore voice pool after file deletion error")
+                raise CatalogError(
+                    "config_restore_failed",
+                    "删除原始音频失败，且恢复文件池配置失败。请检查插件配置和服务器文件。",
+                ) from exc
+            raise CatalogError(
+                "delete_failed",
+                "无法删除原始音频，已恢复文件池配置。请检查文件是否被占用或目录写入权限。",
+            ) from exc
+
     async def delete_voice(self, voice_id: str) -> Any:
         if not self._is_admin():
             return self._forbidden()
         try:
-            self.plugin.catalog.delete(voice_id)
+            entry = self.plugin.catalog.resolve_entry(voice_id)
+            if entry.id.startswith("extra_voices:configured/"):
+                file_deleted = await self._delete_configured_voice(entry)
+                removed_from_pool = True
+            else:
+                self.plugin.catalog.delete(entry.id)
+                file_deleted = True
+                removed_from_pool = False
             self.plugin.refresh_voice_catalog()
-            return self._json({"deleted": True})
+            return self._json({
+                "deleted": True,
+                "file_deleted": file_deleted,
+                "removed_from_pool": removed_from_pool,
+            })
         except CatalogError as error:
             return self._catalog_error(error)
         except Exception:

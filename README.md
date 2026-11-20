@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.12.1-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.12.2-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -104,7 +104,7 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ## 🖥️ Airi音频🌸：音频与关键词管理 Page
 
-**当前版本：v2.12.1**。本次将 AstrBot 插件显示名称统一为「Airi音频🌸」，并同步 README；v2.12.0 的 Hallmark 页面重设计、音频库搜索与排序、播放器交互优化继续保留。
+**当前版本：v2.12.2**。修复 Page 无法删除额外配置文件池音频的问题：经确认后永久删除服务器上的原始音频，并同步移除 `extra_voice_pool` 的配置引用；不存在的文件也可清理失效引用。保存配置失败时不会删除原文件，删除文件失败时会尝试恢复配置。请务必提前备份。
 
 **插件显示名称与 Page 标题均为「Airi音频🌸」**。内部插件标识仍为 `astrbot_plugin_airi_voice`，Page 路径仍为 `pages/airi-voice/index.html`，不影响原有配置和语音数据。
 
@@ -130,7 +130,7 @@ v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 
 2. 在 **音频管理** 中搜索、筛选或排序，点击 **试听** 确认内容，或点击 **下载** 保存到浏览器指定的本地下载位置。`.silk` 文件下载时转换为 `.wav`，其余格式保持原始扩展名。
 3. 在右侧（手机端在列表下方）的 **添加语音** 区域选择音频、确认或修改主触发关键词后点击 **上传语音**。支持 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **50 MB**。
 4. 切换到 **关键词管理**，可为任意音频添加或删除多个额外触发关键词；主关键词和别名都可以触发同一音频。
-5. 需要时可删除插件内置、聊天添加或网页上传的语音；配置文件池中指向外部位置的文件仍保持只读。也可点击重载刷新目录。
+5. 需要时点击 **删除**，在确认弹窗中确认后将永久删除服务器上的**原始音频文件**。对额外配置文件池的语音，还会同步移除对应配置引用；文件已缺失时可直接清除失效引用。**不可恢复，请先下载备份。** 也可点击重载刷新目录。
 6. 在 `admin_mode: admin` 时，将可操作人员的**已认证 Dashboard 用户名**逐项填入 `webui_admin_users`；用户名必须完全一致。`admin_mode: all` 允许所有人操作；`whitelist` 则继续使用现有 `admin_whitelist` 聊天权限策略。
 
 如果页面不可用，请改用 `/voice.list`、`/voice.add 名字`、`/voice.delete 名字` 和 `/voice.reload`；管理命令仍受原有权限控制。
@@ -152,8 +152,8 @@ v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 
 
 - 上传关键词会进行安全校验；包含路径分隔符、`..` 或控制字符的关键词会被拒绝。
 - 主关键词与所有额外触发关键词全局唯一（忽略大小写）；任何冲突都会被拒绝，避免一个关键词对应多个音频。
-- 有权限的管理员可以从 WebUI 删除内置 `voices/`、用户添加和网页上传的语音；`extra_voice_pool` 中由配置直接引用的外部文件保持只读，避免误删配置源。
-- 所有上传、删除和重载都是管理员操作，且目录穿越会被阻止。
+- 有权限的管理员可以从 Page 删除内置 `voices/`、用户添加、网页上传及配置文件池 `extra_voice_pool` 的语音。**删除会永久删除服务器上的原始音频文件**；文件池条目还会从插件配置中移除。Page 会显示明确的不可撤销提示；请在删除前备份文件。
+- 所有上传、删除和重载都是管理员操作；配置文件池删除只能操作插件已登记且位于插件数据目录中的音频，不能通过自定义路径删除其他服务器文件。
 - 下载与试听使用相同的只读音频接口，不提供磁盘绝对路径；实际下载由浏览器处理，不会保存到 AstrBot 服务器之外的其他目录。
 
 ---
