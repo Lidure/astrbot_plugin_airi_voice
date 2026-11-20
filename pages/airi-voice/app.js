@@ -121,7 +121,7 @@
       throw new Error(value.message || "音频接口返回错误");
     }
     if (typeof value.audio_hex === "string") {
-      return { audio_hex: value.audio_hex, content_type: value.content_type || value.contentType };
+      return { audio_hex: value.audio_hex, content_type: value.content_type || value.contentType, filename: value.filename || "" };
     }
     for (const key of ["data", "body", "result", "payload"]) {
       const nested = extractAudioPayload(value[key]);
@@ -130,6 +130,25 @@
     return null;
   }
 
+  function audioBlobFromPayload(payload) {
+    if (!payload || typeof payload.audio_hex !== "string") throw new Error("音频数据无效");
+    const hex = payload.audio_hex;
+    if (!hex.length || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) {
+      throw new Error("音频响应不是有效的音频数据");
+    }
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+    }
+    return new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
+  }
+
+  function audioDownloadFilename(payload, item) {
+    const extension = item.extension === ".silk" ? ".wav" : (item.extension || ".wav");
+    const fallback = `${item.name || "语音"}${extension}`;
+    const name = String(payload.filename || fallback).split(/[\\/]/).pop();
+    return name && name !== "." && name !== ".." ? name : fallback;
+  }
   function stopCurrentAudio({ hide = false } = {}) {
     const audio = elements.audio;
     audio.pause();
@@ -211,7 +230,8 @@
       actions.className = "row-actions";
       const configuredReadOnly = typeof item.id === "string" && item.id.startsWith("extra_voices:configured/");
       actions.append(
-        makeButton("试听", "button button-small button-secondary", () => playVoice(item)),
+        makeButton("试听", "button button-small button-secondary", () => playVoice(item), !item.available),
+        makeButton("下载", "button button-small button-secondary", () => downloadVoice(item), !item.available),
         makeButton("删除", "button button-small button-danger", () => openDeleteDialog(item), configuredReadOnly),
       );
       row.append(name, source, extension, size, actions);
@@ -458,6 +478,33 @@
     }
   }
 
+  async function downloadVoice(item) {
+    if (state.loading || !item.available) return;
+    setLoading(true, `正在准备下载“${item.name || "语音"}”…`);
+    showError(null);
+    let objectUrl = null;
+    try {
+      const response = await bridge().apiGet(`voices/${encodeURIComponent(item.id)}/audio`);
+      const payload = extractAudioPayload(await readResponse(response));
+      const blob = audioBlobFromPayload(payload);
+      const filename = audioDownloadFilename(payload, item);
+      objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      link.hidden = true;
+      document.body.append(link);
+      try { link.click(); } finally { link.remove(); }
+      elements.status.textContent = `已发起下载：${filename}。请查看浏览器下载记录。`;
+    } catch (error) {
+      showError(error);
+      elements.status.textContent = "下载未完成。";
+    } finally {
+      // Keep the Blob URL alive until the browser has accepted the download.
+      if (objectUrl) window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+      setLoading(false);
+    }
+  }
   async function playVoice(item) {
     const requestVersion = ++previewRequestVersion;
     stopCurrentAudio({ hide: true });
@@ -468,16 +515,8 @@
       if (!isCurrentPreviewRequest(requestVersion)) return;
       const payload = extractAudioPayload(await readResponse(response));
       if (!isCurrentPreviewRequest(requestVersion)) return;
-      if (!payload || typeof payload.audio_hex !== "string") throw new Error("音频数据无效");
-      if (!/^[0-9a-f]*$/i.test(payload.audio_hex) || payload.audio_hex.length % 2 !== 0) {
-        throw new Error("音频响应不是有效的音频数据");
-      }
-      const bytes = new Uint8Array(payload.audio_hex.length / 2);
-      for (let index = 0; index < bytes.length; index += 1) {
-        bytes[index] = Number.parseInt(payload.audio_hex.slice(index * 2, index * 2 + 2), 16);
-      }
+      const blob = audioBlobFromPayload(payload);
       if (!isCurrentPreviewRequest(requestVersion)) return;
-      const blob = new Blob([bytes], { type: payload.content_type || "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       showAudioPlayer(item, url);
       await elements.audio.play();
@@ -527,7 +566,7 @@
     uploadVoice,
     deleteVoice,
     reloadVoices,
-    playVoice, stopCurrentAudio,
+    playVoice, downloadVoice, stopCurrentAudio,
     addAlias,
     removeAlias,
     setActiveView,
