@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌸 Airi Voice
+# 🌸 Airi音频🌸
 
 > **输入关键词 → Airi 立刻回你一段可爱语音！**  
 > 让聊天瞬间充满灵魂与温度的轻量级语音插件。
@@ -8,7 +8,7 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-Plugin-brightgreen?style=for-the-badge&logo=github)](https://github.com/Soulter/AstrBot)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.12.0-orange?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-2.12.1-orange?style=for-the-badge)]()
 
 <a href="https://count.getloli.com" target="_blank">
 	<img alt="Moe Counter" src="https://count.getloli.com/@astrbot_plugin_airi_gallery?theme=miku&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto">
@@ -104,9 +104,9 @@ bot 回复的文本只要包含任意语音关键词，就会自动追加对应�
 
 ## 🖥️ Airi音频🌸：音频与关键词管理 Page
 
-**当前版本：v2.12.0**。本次更新包含 Hallmark 页面重设计、音频库搜索与排序、播放器交互优化以及 Page 名称统一。
+**当前版本：v2.12.1**。本次将 AstrBot 插件显示名称统一为「Airi音频🌸」，并同步 README；v2.12.0 的 Hallmark 页面重设计、音频库搜索与排序、播放器交互优化继续保留。
 
-**Page 显示名称为「Airi音频🌸」**（浏览器标题和页面主标题均已同步）；插件在 AstrBot 插件管理中仍显示为「Airi自定义音频发送🌸」，两者是不同的名称。Page 对应文件为 `pages/airi-voice/index.html`，**不需要改动该路径**。
+**插件显示名称与 Page 标题均为「Airi音频🌸」**。内部插件标识仍为 `astrbot_plugin_airi_voice`，Page 路径仍为 `pages/airi-voice/index.html`，不影响原有配置和语音数据。
 
 该页面采用 Hallmark Refract 风格的响应式工作台，桌面端以音频列表为主、上传区域位于侧边，移动端自动纵向排列；支持 AstrBot 的浅色和深色环境。主要操作如下：
 
@@ -126,7 +126,7 @@ v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 
 
 ### 新手快速开始
 
-1. 在 AstrBot Dashboard 进入 **插件管理** → **Airi自定义音频发送🌸** 的插件详情，打开 Page **「Airi音频🌸」**。
+1. 在 AstrBot Dashboard 进入 **插件管理** → **Airi音频🌸** 的插件详情，打开 Page **「Airi音频🌸」**。
 2. 在 **音频管理** 中搜索、筛选或排序，点击 **试听** 确认内容，或点击 **下载** 保存到浏览器指定的本地下载位置。`.silk` 文件下载时转换为 `.wav`，其余格式保持原始扩展名。
 3. 在右侧（手机端在列表下方）的 **添加语音** 区域选择音频、确认或修改主触发关键词后点击 **上传语音**。支持 `.wav`、`.mp3`、`.ogg`、`.silk`、`.amr`、`.flac`、`.m4a`，单文件最大 **50 MB**。
 4. 切换到 **关键词管理**，可为任意音频添加或删除多个额外触发关键词；主关键词和别名都可以触发同一音频。
@@ -179,7 +179,7 @@ v2.9.9 修复 WebUI 上传音频时出现 `Request failed with status code 404` 
 ### 🅰️ 方式一：在「Airi音频🌸」Page 上传（推荐 ✨）
 *在同一个页面完成选择音频、关键词设置和上传，支持热更新。*
 
-1. 打开 **AstrBot 网页后台** → **插件管理** → **Airi自定义音频发送🌸** 的插件详情，进入 **「Airi音频🌸」** Page。
+1. 打开 **AstrBot 网页后台** → **插件管理** → **Airi音频🌸** 的插件详情，进入 **「Airi音频🌸」** Page。
 2. 切换到 **音频管理**，在 **添加语音** 区域选择 `.mp3`、`.wav` 等支持的音频文件。
 3. 确认或修改 **主触发关键词**（默认可由文件名自动填入）。
 4. 点击 **上传语音**；成功后列表自动刷新，无需重启插件。
