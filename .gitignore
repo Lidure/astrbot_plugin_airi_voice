@@ -208,3 +208,8 @@ __marimo__/
 # Local git worktrees used for isolated feature development
 .worktrees/
 .superpowers/
+
+# Local-only development and verification artifacts (not part of public plugin release)
+/tests/
+/docs/superpowers/
+/test.amr
